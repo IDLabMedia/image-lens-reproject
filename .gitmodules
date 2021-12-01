@@ -1,0 +1,12 @@
+[submodule "lib/lodepng"]
+	path = lib/lodepng
+	url = https://github.com/lvandeve/lodepng
+[submodule "lib/tracy"]
+	path = lib/tracy
+	url = https://github.com/wolfpld/tracy
+[submodule "lib/filesystem"]
+	path = lib/filesystem
+	url = https://github.com/gulrak/filesystem
+[submodule "lib/cxxopts"]
+	path = lib/cxxopts
+	url = https://github.com/jarro2783/cxxopts
