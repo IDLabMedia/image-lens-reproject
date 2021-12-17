@@ -10,3 +10,9 @@
 [submodule "lib/cxxopts"]
 	path = lib/cxxopts
 	url = https://github.com/jarro2783/cxxopts
+[submodule "lib/openexr"]
+	path = lib/openexr
+	url = https://github.com/AcademySoftwareFoundation/openexr.git
+[submodule "lib/Imath"]
+	path = lib/Imath
+	url = https://github.com/AcademySoftwareFoundation/Imath

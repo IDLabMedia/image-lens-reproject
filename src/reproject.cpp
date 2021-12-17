@@ -1,6 +1,7 @@
 #include "reproject.hpp"
 
 #include <cmath>
+#include <algorithm>
 
 namespace reproject {
 
@@ -9,13 +10,19 @@ typedef void (*from_func_t)(const LensInfo &li, float img_w, float img_h,
 typedef void (*to_func_t)(const LensInfo &li, float img_w, float img_h,
                           float cx, float cy, float &alpha, float &theta);
 
+template<typename T>
+inline T clamp(T x, T min, T max) {
+    return std::max(min, std::min(max, x));
+}
+
 inline void sample_bilinear(const Image *img, float sx, float sy, float *out) {
-    int lx = sx;
-    int ux = std::min(img->width - 1, int(sx + 1.0f));
-    int ly = sy;
-    int uy = std::min(img->height - 1, int(sy + 1.0f));
-    float fx = sx - lx;
-    float fy = sy - ly;
+    int lx = clamp(int(sx), 0, img->width - 1);
+    int ux = clamp(int(sx + 1.0f), 0, img->width - 1);
+    int ly = clamp(int(sy), 0, img->height - 1);
+    int uy = clamp(int(sy + 1.0f), 0, img->height - 1);
+
+    float fx = std::max(0.0f, std::min(1.0f, sx - lx));
+    float fy = std::max(0.0f, std::min(1.0f, sy - ly));
     float cfx = 1.0f - fx;
     float cfy = 1.0f - fy;
 
@@ -44,11 +51,9 @@ inline void rectilinear_to_spherical(const LensInfo &li, float img_w,
     float r_px = std::sqrt(cx * cx + cy * cy);  // [px]
     alpha = std::atan2(cy, cx);
     float factor = li.sensor_width / img_w;  // [mm / px]
-    // r_px = r_mm / factor
     // r_mm = focal_length_mm * tan(theta)
-    // r_px / factor = focal_length * tan(theta)
-    // r_px * focal_length / factor = tan(theta)
-    theta = std::atan(r_px * li.rectilinear.focal_length * factor);
+    // TODO validate
+    theta = std::atan(r_px / li.rectilinear.focal_length * factor);
 }
 
 inline void spherical_to_rectilinear(const LensInfo &li, float img_w,
@@ -60,6 +65,7 @@ inline void spherical_to_rectilinear(const LensInfo &li, float img_w,
     float r_px = r_mm / li.sensor_width * img_w;
     cx = r_px * x;
     cy = r_px * y;
+    // TODO valide
 }
 
 // === EQUIDISTANT ===
@@ -68,13 +74,13 @@ inline void equidistant_to_spherical(const LensInfo &li, float img_w,
                                      float img_h, float cx, float cy,
                                      float &alpha, float &theta) {
     float r_px = std::sqrt(cx * cx + cy * cy);  // [px]
+
+    float r_mm = r_px / img_w * li.sensor_width;
+    float focal_length = li.sensor_width / li.fisheye_equidistant.fov;
+    // r_mm = f * theta
+    // theta = r_mm / f
+    theta = r_mm / focal_length;
     alpha = std::atan2(cy, cx);
-    float factor = li.sensor_width / img_w;  // [mm / px]
-    // r_px = r_mm / factor
-    // r_mm = focal_length_mm * theta
-    // r_px / factor = focal_length * theta
-    // r_px * focal_length / factor = theta
-    theta = r_px * li.rectilinear.focal_length * factor;
 }
 
 inline void spherical_to_equidistant(const LensInfo &li, float img_w,
@@ -82,7 +88,18 @@ inline void spherical_to_equidistant(const LensInfo &li, float img_w,
                                      float &cx, float &cy) {
     float x = std::cos(alpha);
     float y = std::sin(alpha);
-    float r_mm = li.rectilinear.focal_length * theta;
+
+    // r_mm = f * theta
+    // r_px = (r_mm / sensor_size) * image_size
+    // r_px = (f * theta / sensor_size) * image_size
+
+    // sensor_size/2 = f * (fov/2)
+    // f = sensor_size / fov
+
+    float factor = li.sensor_width / img_w;  // [mm / px]
+    float focal_length = li.sensor_width / li.fisheye_equidistant.fov;
+
+    float r_mm = focal_length * theta;
     float r_px = r_mm / li.sensor_width * img_w;
     cx = r_px * x;
     cy = r_px * y;
@@ -103,6 +120,10 @@ void reproject_from_to(const Image *in, Image *out) {
 
             float sx, sy;  // source coordinate on input image
             tf(in->lens, in->width, in->height, alpha, theta, sx, sy);
+
+            // convert back to top-left aligned coordinates
+            sx = (sx - 0.5f) + in->width * 0.5f;
+            sy = (sy - 0.5f) + in->height * 0.5f;
 
             // bilinear interpolation from source image
             float *dst = &out->data[y * pitch + x * out->channels];

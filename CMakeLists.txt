@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 cmake_policy(SET CMP0022 NEW)
+cmake_policy(SET CMP0079 NEW)
 
 project(reproject VERSION 0.1)
 
@@ -21,6 +22,15 @@ add_definitions(-DTRACY_ENABLE)
 add_library(lodepng STATIC "lib/lodepng/lodepng.cpp")
 target_include_directories(lodepng PUBLIC "lib/lodepng/")
 
+add_subdirectory(lib/Imath)
+
+set(OPENEXR_INSTALL OFF CACHE BOOL "" FORCE)
+set(OPENEXR_INSTALL_TOOLS OFF CACHE BOOL "" FORCE)
+set(OPENEXR_INSTALL_EXAMPLES OFF CACHE BOOL "" FORCE)
+add_subdirectory(lib/openexr)
+# Cleanup their mess
+target_link_libraries(OpenEXRCore PUBLIC Imath::Imath)
+
 add_executable(reproject
     "src/main.cpp"
     "src/reproject.cpp"
@@ -35,4 +45,5 @@ target_link_libraries(reproject PUBLIC
     SDL2::SDL2main
     cxxopts
     TracyClient
+    OpenEXR::OpenEXR
     )
