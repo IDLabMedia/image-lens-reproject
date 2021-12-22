@@ -6,12 +6,14 @@
 #include <ImfRgbaFile.h>
 #include <lodepng.h>
 
+#include <Tracy.hpp>
 #include <cxxopts.hpp>
 
 #include "reproject.hpp"
 
 void readRgba1(const char fileName[], Imf::Array2D<Imf::Rgba> &pixels,
                int &width, int &height) {
+    ZoneScoped;
     //
     // Read an RGBA image using class RgbaInputFile:
     //
@@ -32,6 +34,38 @@ void readRgba1(const char fileName[], Imf::Array2D<Imf::Rgba> &pixels,
     file.readPixels(dw.min.y, dw.max.y);
 }
 
+void save_png(const reproject::Image &output, std::string output_file) {
+    ZoneScoped;
+    uint8_t *image_buf = new uint8_t[output.width * output.height * 4];
+    float vmax = 0.0f;
+    float vmin = 1.0f;
+    for (int y = 0; y < output.height; ++y) {
+        for (int x = 0; x < output.width; ++x) {
+            for (int c = 0; c < output.channels; ++c) {
+                float s =
+                    output.data[((y * output.width) + x) * output.channels + c];
+                vmax = std::max(vmax, s);
+                vmin = std::min(vmin, s);
+                // s = s / (s + 1.0f);
+                s = std::max(0.0f, std::min(1.0f, s));
+                s = std::pow(s, 1.0f / 2.2f);
+                uint8_t d = uint8_t(255.9f * s);
+                image_buf[((y * output.width) + x) * 4 + c] = d;
+            }
+            if (output.channels != 4) {
+                image_buf[((y * output.width) + x) * 4 + 3] = 255;
+            }
+        }
+    }
+    {
+        ZoneScopedN("lodepng::encode");
+        lodepng::encode(output_file.c_str(), image_buf, output.width,
+                        output.height);
+    }
+    std::printf("min: %f  max: %f\n", vmin, vmax);
+    delete[] image_buf;
+}
+
 int main(int argc, char **argv) {
     // clang-format off
     cxxopts::Options options(argv[0],
@@ -43,24 +77,59 @@ int main(int argc, char **argv) {
          cxxopts::value<std::string>(), "file")
         ("o,output", "Output file",
          cxxopts::value<std::string>(), "file")
+        ("s,samples", "Number of samples per dimension for interpolating",
+         cxxopts::value<int>()->default_value("1"), "number")
+
+        ("nn", "Nearest neighbor interpolation")
+        ("bl", "Bilinear interpolation")
+        ("bc", "Bicubic interpolation (default)")
+
         ("rectilinear", "Output rectilinear image with given FOV.",
          cxxopts::value<float>(), "fov")
         ("h,help", "Show help")
         ;
     // clang-format on
     cxxopts::ParseResult result;
+
+    std::string input_file;
+    std::string output_file;
+    reproject::Interpolation interpolation = reproject::BICUBIC;
+    int num_samples;
     try {
         result = options.parse(argc, argv);
         if (result.count("help")) {
             std::printf("%s\n", options.help().c_str());
             return 0;
         }
+        input_file = result["input"].as<std::string>();
+        output_file = result["output"].as<std::string>();
+        num_samples = result["samples"].as<int>();
     } catch (cxxopts::OptionParseException &e) {
+        std::printf("%s\n\n%s\n", e.what(), options.help().c_str());
+        return 1;
+    } catch (cxxopts::OptionException &e) {
         std::printf("%s\n\n%s\n", e.what(), options.help().c_str());
         return 1;
     }
 
-    std::string input_file = result["input"].as<std::string>();
+    int found_interpolation_flag = 0;
+    if (result.count("nn")) {
+        found_interpolation_flag++;
+        interpolation = reproject::NEAREST;
+    }
+    if (result.count("bl")) {
+        found_interpolation_flag++;
+        interpolation = reproject::BILINEAR;
+    }
+    if (result.count("bc")) {
+        found_interpolation_flag++;
+        interpolation = reproject::BICUBIC;
+    }
+    if (found_interpolation_flag > 1) {
+        std::printf("Cannot specify more than one interpolation method.\n\n%s",
+                    options.help().c_str());
+    }
+
     std::printf("Reading EXR files: %s\n", input_file.c_str());
     Imf::Array2D<Imf::Rgba> data;
     int width, height;
@@ -79,19 +148,25 @@ int main(int argc, char **argv) {
     input.height = height;
     input.channels = 3;
     input.data = new float[input.width * input.height * input.channels];
-    for (int y = 0; y < input.height; ++y) {
-        for (int x = 0; x < input.width; ++x) {
-            Imf::Rgba p = data[y][x];
-            input.data[(y * input.width + x) * input.channels + 0] = float(p.r);
-            input.data[(y * input.width + x) * input.channels + 1] = float(p.g);
-            input.data[(y * input.width + x) * input.channels + 2] = float(p.b);
+    {
+        ZoneScopedN("convert EXR to float buffer");
+        for (int y = 0; y < input.height; ++y) {
+            for (int x = 0; x < input.width; ++x) {
+                Imf::Rgba p = data[y][x];
+                input.data[(y * input.width + x) * input.channels + 0] =
+                    float(p.r);
+                input.data[(y * input.width + x) * input.channels + 1] =
+                    float(p.g);
+                input.data[(y * input.width + x) * input.channels + 2] =
+                    float(p.b);
+            }
         }
     }
 
     reproject::Image output;
 #if 1
     output.lens.type = reproject::LensType::RECTILINEAR;
-    output.lens.rectilinear.focal_length = 18.0f;
+    output.lens.rectilinear.focal_length = 4.0f;
     output.lens.sensor_width = 36.0f;
     output.lens.sensor_height = 36.0f;
 #else
@@ -103,33 +178,13 @@ int main(int argc, char **argv) {
     output.data = new float[output.width * output.height * output.channels];
 
     std::printf("Reprojecting...\n");
-    reproject::reproject(&input, &output);
+    reproject::reproject(&input, &output, num_samples, interpolation);
     std::printf("Done!\n");
 
-    std::string output_file = result["output"].as<std::string>();
-    uint8_t *image_buf = new uint8_t[output.width * output.height * 4];
-    float vmax = 0.0f;
-    float vmin = 1.0f;
-    for (int y = 0; y < output.height; ++y) {
-        for (int x = 0; x < output.width; ++x) {
-            for (int c = 0; c < output.channels; ++c) {
-                float s =
-                    output.data[((y * output.width) + x) * output.channels + c];
-                vmax = std::max(vmax, s);
-                vmin = std::min(vmin, s);
-                //s = s / (s + 1.0f);
-                s = std::max(0.0f, std::min(1.0f, s));
-                uint8_t d = uint8_t(255.9f * s);
-                image_buf[((y * output.width) + x) * 4 + c] = d;
-            }
-            if (output.channels != 4) {
-                image_buf[((y * output.width) + x) * 4 + 3] = 255;
-            }
-        }
-    }
-    lodepng::encode(output_file.c_str(), image_buf, output.width,
-                    output.height);
-    std::printf("min: %f  max: %f\n", vmin, vmax);
+    save_png(output, output_file);
+
+    delete[] input.data;
+    delete[] output.data;
 
     return 0;
 }

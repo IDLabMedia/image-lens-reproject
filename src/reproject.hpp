@@ -10,6 +10,13 @@ struct Image {
     float *data;
 };
 
-void reproject(const Image *in, Image *out);
+enum Interpolation {
+    NEAREST,
+    BILINEAR,
+    BICUBIC,
+};
+
+void reproject(const Image *in, Image *out, int num_samples,
+               Interpolation interpolation);
 
 }  // namespace reproject
