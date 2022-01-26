@@ -34,6 +34,8 @@ target_link_libraries(OpenEXRCore PUBLIC Imath::Imath)
 add_library(ctpl INTERFACE)
 target_include_directories(ctpl INTERFACE "lib/ctpl/")
 
+add_subdirectory(lib/json)
+
 add_executable(reproject
     "src/batch.cpp"
     "src/reproject.cpp"
@@ -51,4 +53,5 @@ target_link_libraries(reproject PUBLIC
     TracyClient
     OpenEXR::OpenEXR
     ctpl
+    nlohmann_json
     )

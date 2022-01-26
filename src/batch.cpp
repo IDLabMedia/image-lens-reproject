@@ -7,6 +7,7 @@
 #include <cmath>
 #include <ctpl_stl.h>
 #include <ghc/filesystem.hpp>
+#include <nlohmann/json.hpp>
 
 namespace fs = ghc::filesystem;
 
@@ -31,7 +32,10 @@ int main(int argc, char **argv) {
     ("bl", "Bilinear interpolation")
     ("bc", "Bicubic interpolation (default)")
 
-    ("scale", "Output scale, as a percentage of the input size.",
+    ("scale", "Output scale, as a percentage of the input size. "
+     "It is recommended to increase --samples to prevent aliassing "
+     "in case you are downscaling. Eg: --scale 50 --samples 2 "
+     "or --scale 25 --samples 4",
      cxxopts::value<int>()->default_value("100"), "percentage")
     ("rectilinear", "Output rectilinear image with given FOV.",
      cxxopts::value<float>(), "fov")
@@ -88,6 +92,40 @@ int main(int argc, char **argv) {
     std::printf("%s", options.help().c_str());
   }
 
+  nlohmann::json cfg;
+  std::ifstream cfg_ifstream{cfg_file};
+  cfg_ifstream >> cfg;
+  cfg_ifstream.close();
+
+  nlohmann::json camera_cfg = cfg["camera"];
+  std::printf("Found camera config: %s\n", camera_cfg.dump(1).c_str());
+  std::string camera_type = camera_cfg["/type"_json_pointer];
+  reproject::LensInfo input_lens;
+  if (camera_type == "PANO") {
+    camera_type = camera_cfg["panorama_type"].get<std::string>();
+    if (camera_type == "FISHEYE_EQUIDISTANT") {
+      input_lens.type = reproject::FISHEYE_EQUIDISTANT;
+      input_lens.fisheye_equidistant.fov =
+          camera_cfg["fisheye_fov"].get<float>();
+    } else if (camera_type == "FISHEYE_EQUISOLID") {
+      input_lens.type = reproject::FISHEYE_EQUISOLID;
+      input_lens.fisheye_equisolid.focal_length =
+          camera_cfg["fisheye_lens"].get<float>();
+      input_lens.fisheye_equisolid.fov = camera_cfg["fisheye_fov"].get<float>();
+    } else if (camera_type == "EQUIRECTANGULAR") {
+      // TODO
+      return 1;
+    }
+  } else if (camera_type == "PERSP") {
+    // TODO
+    return 1;
+  } else {
+    return 1;
+  }
+  input_lens.sensor_width = cfg["sensor_size"][0].get<float>();
+  input_lens.sensor_height = cfg["sensor_size"][1].get<float>();
+  std::printf("camera_type: %s\n", camera_type.c_str());
+
   fs::directory_iterator end;
   fs::directory_iterator it{fs::path(input_dir)};
 
@@ -96,19 +134,17 @@ int main(int argc, char **argv) {
     if (it->is_regular_file()) {
       fs::path p = *it;
       if (p.extension() == ".exr" || p.extension() == ".png") {
-        pool.push([p, num_samples, interpolation, output_dir, scale](int) {
+        pool.push([p, num_samples, interpolation, output_dir, scale,
+                   input_lens](int) {
           std::printf("%s\n", p.c_str());
 
           reproject::Image input = reproject::read_exr(p.string());
-          input.lens.type = reproject::LensType::FISHEYE_EQUIDISTANT;
-          input.lens.fisheye_equidistant.fov = M_PI;
-          input.lens.sensor_width = 36.0f;
-          input.lens.sensor_height = 36.0f;
+          input.lens = input_lens;
 
           reproject::Image output;
 #if 1
           output.lens.type = reproject::LensType::RECTILINEAR;
-          output.lens.rectilinear.focal_length = 4.0f;
+          output.lens.rectilinear.focal_length = 12.0f;
           output.lens.sensor_width = 36.0f;
           output.lens.sensor_height = 36.0f;
 #endif

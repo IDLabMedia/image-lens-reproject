@@ -19,3 +19,6 @@
 [submodule "lib/ctpl"]
 	path = lib/ctpl
 	url = https://github.com/vit-vit/CTPL
+[submodule "lib/json"]
+	path = lib/json
+	url = https://github.com/nlohmann/json

@@ -40,7 +40,7 @@ void save_png(const reproject::Image &output, std::string output_file) {
     lodepng::encode(output_file.c_str(), image_buf, output.width,
                     output.height);
   }
-  std::printf("min: %f  max: %f\n", vmin, vmax);
+  //std::printf("min: %f  max: %f\n", vmin, vmax);
   delete[] image_buf;
 }
 
