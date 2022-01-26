@@ -14,26 +14,26 @@
 
 int main(int argc, char **argv) {
   // clang-format off
-    cxxopts::Options options(argv[0],
-        "Reprojection tool for producing a variation of lens\n"
-        "configurations based on one reference image given a\n"
-        "known lens configuration.");
-    options.add_options()
-        ("i,input", "Input image to reproject",
-         cxxopts::value<std::string>(), "file")
-        ("o,output", "Output file",
-         cxxopts::value<std::string>(), "file")
-        ("s,samples", "Number of samples per dimension for interpolating",
-         cxxopts::value<int>()->default_value("1"), "number")
+  cxxopts::Options options(argv[0],
+    "Reprojection tool for producing a variation of lens\n"
+    "configurations based on one reference image given a\n"
+    "known lens configuration.");
+  options.add_options()
+    ("i,input", "Input image to reproject",
+     cxxopts::value<std::string>(), "file")
+    ("o,output", "Output file",
+     cxxopts::value<std::string>(), "file")
+    ("s,samples", "Number of samples per dimension for interpolating",
+     cxxopts::value<int>()->default_value("1"), "number")
 
-        ("nn", "Nearest neighbor interpolation")
-        ("bl", "Bilinear interpolation")
-        ("bc", "Bicubic interpolation (default)")
+    ("nn", "Nearest neighbor interpolation")
+    ("bl", "Bilinear interpolation")
+    ("bc", "Bicubic interpolation (default)")
 
-        ("rectilinear", "Output rectilinear image with given FOV.",
-         cxxopts::value<float>(), "fov")
-        ("h,help", "Show help")
-        ;
+    ("rectilinear", "Output rectilinear image with given FOV.",
+     cxxopts::value<float>(), "fov")
+    ("h,help", "Show help")
+    ;
   // clang-format on
   cxxopts::ParseResult result;
 

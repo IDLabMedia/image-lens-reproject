@@ -68,6 +68,7 @@ static void readRgba1(const char fileName[], Imf::Array2D<Imf::Rgba> &pixels,
 }
 
 reproject::Image read_exr(std::string input_file) {
+  ZoneScoped;
   Imf::Array2D<Imf::Rgba> data;
   int width, height;
   readRgba1(input_file.c_str(), data, width, height);

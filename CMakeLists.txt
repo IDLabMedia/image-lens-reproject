@@ -31,8 +31,11 @@ add_subdirectory(lib/openexr)
 # Cleanup their mess
 target_link_libraries(OpenEXRCore PUBLIC Imath::Imath)
 
+add_library(ctpl INTERFACE)
+target_include_directories(ctpl INTERFACE "lib/ctpl/")
+
 add_executable(reproject
-    "src/main.cpp"
+    "src/batch.cpp"
     "src/reproject.cpp"
     "src/image_formats.cpp"
     )
@@ -47,4 +50,5 @@ target_link_libraries(reproject PUBLIC
     cxxopts
     TracyClient
     OpenEXR::OpenEXR
+    ctpl
     )

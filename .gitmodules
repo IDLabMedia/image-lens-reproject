@@ -16,3 +16,6 @@
 [submodule "lib/Imath"]
 	path = lib/Imath
 	url = https://github.com/AcademySoftwareFoundation/Imath
+[submodule "lib/ctpl"]
+	path = lib/ctpl
+	url = https://github.com/vit-vit/CTPL
