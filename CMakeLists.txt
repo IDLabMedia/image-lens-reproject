@@ -34,6 +34,7 @@ target_link_libraries(OpenEXRCore PUBLIC Imath::Imath)
 add_executable(reproject
     "src/main.cpp"
     "src/reproject.cpp"
+    "src/image_formats.cpp"
     )
 target_include_directories(reproject PUBLIC "src")
 target_link_libraries(reproject PUBLIC
