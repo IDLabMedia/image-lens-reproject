@@ -4,6 +4,7 @@
 
 #include "image_formats.hpp"
 #include "reproject.hpp"
+#include <atomic>
 #include <cmath>
 #include <ctpl_stl.h>
 #include <ghc/filesystem.hpp>
@@ -47,6 +48,7 @@ int main(int argc, char **argv) {
 
     ("j,parallel", "Number of parallal images to process.",
      cxxopts::value<int>()->default_value("1"), "threads")
+    ("dry-run", "Do not actually reproject images. Only produce config.")
     ("h,help", "Show help")
     ;
   // clang-format on
@@ -59,6 +61,7 @@ int main(int argc, char **argv) {
   std::string input_cfg_file;
   std::string output_cfg_file;
   int scale;
+  bool dry_run = false;
   try {
     result = options.parse(argc, argv);
     if (result.count("help")) {
@@ -78,6 +81,10 @@ int main(int argc, char **argv) {
   } catch (cxxopts::OptionException &e) {
     std::printf("%s\n\n%s\n", e.what(), options.help().c_str());
     return 1;
+  }
+
+  if (result.count("dry-run")) {
+    dry_run = true;
   }
 
   reproject::Interpolation interpolation = reproject::BICUBIC;
@@ -183,8 +190,10 @@ int main(int argc, char **argv) {
 
     out_cfg["camera"]["projection_matrix"] = nlohmann::json::array();
     float proj[16] = {0.0f};
-    proj[0] = output_lens.rectilinear.focal_length / output_lens.sensor_width;
-    proj[5] = output_lens.rectilinear.focal_length / output_lens.sensor_height;
+    proj[0] =
+        2.0f * output_lens.rectilinear.focal_length / output_lens.sensor_width;
+    proj[5] =
+        2.0f * output_lens.rectilinear.focal_length / output_lens.sensor_height;
     proj[15] = 1.0f;
     for (int r = 0; r < 4; ++r) {
       out_cfg["camera"]["projection_matrix"].push_back(nlohmann::json::array());
@@ -198,18 +207,24 @@ int main(int argc, char **argv) {
   cfg_ofstream << out_cfg.dump(2);
   cfg_ofstream.close();
 
+  if (dry_run) {
+    std::printf("Dry-run. Exiting.\n");
+    return 0;
+  }
+
   fs::directory_iterator end;
   fs::directory_iterator it{fs::path(input_dir)};
 
+  int count = 0;
+  std::atomic_int done_count{0};
   ctpl::thread_pool pool(num_threads);
   for (; it != end; ++it) {
     if (it->is_regular_file()) {
       fs::path p = *it;
       if (p.extension() == ".exr" || p.extension() == ".png") {
+        count++;
         pool.push([p, num_samples, interpolation, output_dir, scale, input_lens,
-                   output_lens](int) {
-          std::printf("%s\n", p.c_str());
-
+                   output_lens, &done_count, &count](int) {
           reproject::Image input = reproject::read_exr(p.string());
           input.lens = input_lens;
 
@@ -231,6 +246,9 @@ int main(int argc, char **argv) {
 
           delete[] input.data;
           delete[] output.data;
+
+          int dc = ++done_count;
+          std::printf("%4d / %4d\n", dc, count);
         });
       }
     }
