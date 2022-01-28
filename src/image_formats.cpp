@@ -44,6 +44,36 @@ void save_png(const reproject::Image &output, std::string output_file) {
   delete[] image_buf;
 }
 
+reproject::Image read_png(std::string input_file) {
+  ZoneScoped;
+  std::vector<uint8_t> data;
+  lodepng::load_file(data, input_file);
+
+  unsigned int w, h;
+  std::vector<uint8_t> color_data;
+  lodepng::decode(color_data, w, h, data);
+
+  reproject::Image input;
+  input.width = w;
+  input.height = h;
+  input.channels = 3;
+  input.data = new float[input.width * input.height * input.channels];
+  {
+    ZoneScopedN("convert EXR to float buffer");
+    for (int y = 0; y < input.height; ++y) {
+      for (int x = 0; x < input.width; ++x) {
+        uint8_t *p = &color_data[(y * w + x) * 4];
+        int oo = (y * input.width + x) * input.channels;
+        input.data[oo + 0] = std::pow(float(p[0]) / 255.0f, 2.2f);
+        input.data[oo + 1] = std::pow(float(p[1]) / 255.0f, 2.2f);
+        input.data[oo + 2] = std::pow(float(p[2]) / 255.0f, 2.2f);
+      }
+    }
+  }
+
+  return input;
+}
+
 static void readRgba1(const char fileName[], Imf::Array2D<Imf::Rgba> &pixels,
                       int &width, int &height) {
   ZoneScoped;

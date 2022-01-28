@@ -203,6 +203,10 @@ int main(int argc, char **argv) {
     }
   }
 
+  std::printf("Creating directory: %s\n", output_dir.c_str());
+  fs::create_directory(output_dir);
+
+  std::printf("Saving output config: %s\n", output_cfg_file.c_str());
   std::ofstream cfg_ofstream{output_cfg_file};
   cfg_ofstream << out_cfg.dump(2);
   cfg_ofstream.close();
@@ -211,6 +215,7 @@ int main(int argc, char **argv) {
     std::printf("Dry-run. Exiting.\n");
     return 0;
   }
+
 
   fs::directory_iterator end;
   fs::directory_iterator it{fs::path(input_dir)};
@@ -225,7 +230,12 @@ int main(int argc, char **argv) {
         count++;
         pool.push([p, num_samples, interpolation, output_dir, scale, input_lens,
                    output_lens, &done_count, &count](int) {
-          reproject::Image input = reproject::read_exr(p.string());
+          reproject::Image input;
+          if (p.extension() == ".exr") {
+            input = reproject::read_exr(p.string());
+          } else if (p.extension() == ".png") {
+            input = reproject::read_png(p.string());
+          }
           input.lens = input_lens;
 
           reproject::Image output;
