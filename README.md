@@ -9,7 +9,7 @@ lens-reproject is a tool to reproject images taken with a known lens to a new
 lens. The process is unprojects every pixel coordinate back to the light ray in
 spherical coordinates -- with the origin set to the center of projection --
 after which it projects the light ray back onto the sensor using the new lens
-paramaters. A variety of lenses is supported:
+parameters. A variety of lenses is supported:
 
  - Rectilinear (The default perspective projection lenses).
  - Equisolid (Fisheye)
@@ -55,7 +55,7 @@ Usage:
                                 value.
 
  Runtime options:
-  -j, --parallel threads  Number of parallal images to process. (default: 
+  -j, --parallel threads  Number of parallel images to process. (default: 
                           1)
       --dry-run           Do not actually reproject images. Only produce 
                           config.
