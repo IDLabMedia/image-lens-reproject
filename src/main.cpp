@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
     "Reprojection tool for producing a variation of lens\n"
     "configurations based on one reference image given a\n"
     "known lens configuration.");
-  options.add_options()
+  options.add_options("Input/output")
     ("input-cfg", "Input JSON file containing lens and camera "
                   "settings of the input images.",
      cxxopts::value<std::string>(), "json-file")
@@ -29,6 +29,9 @@ int main(int argc, char **argv) {
      cxxopts::value<std::string>(), "file")
     ("o,output-dir", "Output directory to put the reprojected images.",
      cxxopts::value<std::string>(), "file")
+    ;
+
+  options.add_options("Sampling")
     ("s,samples", "Number of samples per dimension for interpolating",
      cxxopts::value<int>()->default_value("1"), "number")
 
@@ -42,7 +45,9 @@ int main(int argc, char **argv) {
      "or --scale 33.334 --samples 3 or --scale 25 --samples 4. "
      "Final dimensions are rounded towards zero.",
      cxxopts::value<double>()->default_value("100"), "percentage")
+    ;
 
+  options.add_options("Output optics")
     ("rectilinear", "Output rectilinear images with given "
                     "focal_length,sensor_width tuple.",
      cxxopts::value<std::string>(), "focal_length,sensor_width")
@@ -52,7 +57,9 @@ int main(int argc, char **argv) {
     ("equidistant", "Output equidistant images with given "
                     "fov value.",
      cxxopts::value<std::string>(), "fov")
+    ;
 
+  options.add_options("Runtime")
     ("j,parallel", "Number of parallal images to process.",
      cxxopts::value<int>()->default_value("1"), "threads")
     ("dry-run", "Do not actually reproject images. Only produce config.")
