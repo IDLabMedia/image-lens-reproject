@@ -1,5 +1,5 @@
 # Image Lens Reprojection Tool
-![compile status](https://github.com/IDLabMEDIA/image-lens-reproject/actions/workflows/cmake.yml/badge.svg)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/IDLabMedia/image-lens-reproject/CMake)
 [![GitHub license](https://img.shields.io/github/license/IDLabMedia/image-lens-reproject)](https://github.com/IDLabMedia/image-lens-reproject/blob/main/LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/IDLabMedia/image-lens-reproject)](https://github.com/IDLabMedia/image-lens-reproject/stargazers)
 
