@@ -1,3 +1,5 @@
+![compile status](https://github.com/IDLabMEDIA/image-lens-reproject/actions/workflows/cmake.yml/badge.svg)
+
 ## What is lens-reproject?
 
 lens-reproject is a tool to reproject images taken with a known lens to a new
