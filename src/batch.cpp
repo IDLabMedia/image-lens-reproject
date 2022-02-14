@@ -39,12 +39,19 @@ int main(int argc, char **argv) {
     ("scale", "Output scale, as a percentage of the input size. "
      "It is recommended to increase --samples to prevent aliassing "
      "in case you are downscaling. Eg: --scale 50 --samples 2 "
-     "or --scale 25 --samples 4",
-     cxxopts::value<int>()->default_value("100"), "percentage")
+     "or --scale 33.334 --samples 3 or --scale 25 --samples 4. "
+     "Final dimensions are rounded towards zero.",
+     cxxopts::value<double>()->default_value("100"), "percentage")
 
-    ("rectilinear", "Output rectilinear image with given "
+    ("rectilinear", "Output rectilinear images with given "
                     "focal_length,sensor_width tuple.",
      cxxopts::value<std::string>(), "focal_length,sensor_width")
+    ("equisolid", "Output equisolid images with given "
+                  "focal_length,sensor_width,fov tuple.",
+     cxxopts::value<std::string>(), "focal_length,sensor_width,fov")
+    ("equidistant", "Output equidistant images with given "
+                    "fov value.",
+     cxxopts::value<std::string>(), "fov")
 
     ("j,parallel", "Number of parallal images to process.",
      cxxopts::value<int>()->default_value("1"), "threads")
@@ -60,7 +67,7 @@ int main(int argc, char **argv) {
   std::string output_dir;
   std::string input_cfg_file;
   std::string output_cfg_file;
-  int scale;
+  double scale;
   bool dry_run = false;
   try {
     result = options.parse(argc, argv);
@@ -166,6 +173,7 @@ int main(int argc, char **argv) {
   }
 
   reproject::LensInfo output_lens;
+  int output_lens_types_found = 0;
   if (result.count("rectilinear")) {
     std::string lstr = result["rectilinear"].as<std::string>();
     int comma = lstr.find(",");
@@ -173,27 +181,24 @@ int main(int argc, char **argv) {
       std::printf("Error: Required format for --rectilinear x,y\n");
       return 1;
     }
+    auto &ol = output_lens;
+    auto &olr = output_lens.rectilinear;
     output_lens.type = reproject::RECTILINEAR;
-    output_lens.rectilinear.focal_length =
-        std::atof(lstr.substr(0, comma).c_str());
-    output_lens.sensor_width = std::atof(lstr.substr(comma + 1).c_str());
-    output_lens.sensor_height =
-        (float)res_y / (float)res_x * output_lens.sensor_width;
-
+    olr.focal_length = std::atof(lstr.substr(0, comma).c_str());
+    ol.sensor_width = std::atof(lstr.substr(comma + 1).c_str());
+    ol.sensor_height = (float)res_y / (float)res_x * ol.sensor_width;
     // write to out_cfg
     out_cfg["camera"] = nlohmann::json::object();
     out_cfg["camera"]["type"] = "PERSP";
     out_cfg["camera"]["lens_unit"] = "MILLIMETERS";
-    out_cfg["camera"]["focal_length"] = output_lens.rectilinear.focal_length;
-    out_cfg["sensor_size"][0] = output_lens.sensor_width;
-    out_cfg["sensor_size"][1] = output_lens.sensor_height;
+    out_cfg["camera"]["focal_length"] = olr.focal_length;
+    out_cfg["sensor_size"][0] = ol.sensor_width;
+    out_cfg["sensor_size"][1] = ol.sensor_height;
 
     out_cfg["camera"]["projection_matrix"] = nlohmann::json::array();
     float proj[16] = {0.0f};
-    proj[0] =
-        2.0f * output_lens.rectilinear.focal_length / output_lens.sensor_width;
-    proj[5] =
-        2.0f * output_lens.rectilinear.focal_length / output_lens.sensor_height;
+    proj[0] = 2.0f * olr.focal_length / ol.sensor_width;
+    proj[5] = 2.0f * olr.focal_length / ol.sensor_height;
     proj[15] = 1.0f;
     for (int r = 0; r < 4; ++r) {
       out_cfg["camera"]["projection_matrix"].push_back(nlohmann::json::array());
@@ -201,6 +206,60 @@ int main(int argc, char **argv) {
         out_cfg["camera"]["projection_matrix"][r].push_back(proj[r * 4 + c]);
       }
     }
+
+    output_lens_types_found++;
+  }
+  if (result.count("equisolid")) {
+    std::string lstr = result["equisolid"].as<std::string>();
+    int comma1 = lstr.find(",");
+    int comma2 = lstr.find(",", comma1 + 1);
+    if (comma1 == std::string::npos || comma2 == std::string::npos) {
+      std::printf("Error: Required format for --equisolid x,y,z\n");
+      return 1;
+    }
+    auto &ol = output_lens;
+    auto &olfes = output_lens.fisheye_equisolid;
+    output_lens.type = reproject::FISHEYE_EQUISOLID;
+    olfes.focal_length = std::atof(lstr.substr(0, comma1).c_str());
+    olfes.fov = std::atof(lstr.substr(comma2 + 1).c_str());
+    ol.sensor_width = std::atof(lstr.substr(comma1 + 1, comma2).c_str());
+    ol.sensor_height = (float)res_y / (float)res_x * ol.sensor_width;
+
+    // write to out_cfg
+    out_cfg["camera"] = nlohmann::json::object();
+    out_cfg["camera"]["type"] = "PANO";
+    out_cfg["camera"]["panorama_type"] = "FISHEYE_EQUISOLID";
+    out_cfg["camera"]["fisheye_lens"] = olfes.focal_length;
+    out_cfg["camera"]["fisheye_fov"] = olfes.fov;
+    out_cfg["sensor_size"][0] = ol.sensor_width;
+    out_cfg["sensor_size"][1] = ol.sensor_height;
+
+    output_lens_types_found++;
+  }
+  if (result.count("equidistant")) {
+    std::string lstr = result["equidistant"].as<std::string>();
+    auto &ol = output_lens;
+    auto &olfed = output_lens.fisheye_equidistant;
+    output_lens.type = reproject::FISHEYE_EQUISOLID;
+    olfed.fov = std::atof(lstr.c_str());
+    ol.sensor_width = 36.0f;
+    ol.sensor_height = 36.0f;
+
+    // write to out_cfg
+    out_cfg["camera"] = nlohmann::json::object();
+    out_cfg["camera"]["type"] = "PANO";
+    out_cfg["camera"]["panorama_type"] = "FISHEYE_EQUIDISTANT";
+    out_cfg["camera"]["fisheye_fov"] = olfed.fov;
+    out_cfg["sensor_size"][0] = ol.sensor_width;
+    out_cfg["sensor_size"][1] = ol.sensor_height;
+
+    output_lens_types_found++;
+  }
+
+  if (output_lens_types_found > 1) {
+    std::printf("Error: only specify one output lens type: [--rectilinear, "
+                "--equisolid, --equidistant].\n");
+    return 1;
   }
 
   std::printf("Creating directory: %s\n", output_dir.c_str());
@@ -215,7 +274,6 @@ int main(int argc, char **argv) {
     std::printf("Dry-run. Exiting.\n");
     return 0;
   }
-
 
   fs::directory_iterator end;
   fs::directory_iterator it{fs::path(input_dir)};
@@ -241,8 +299,8 @@ int main(int argc, char **argv) {
           reproject::Image output;
           output.lens = output_lens;
 
-          output.width = input.width * scale / 100;
-          output.height = input.height * scale / 100;
+          output.width = int(input.width * scale / 100);
+          output.height = int(input.height * scale / 100);
           output.channels = input.channels;
           output.data =
               new float[output.width * output.height * output.channels];
