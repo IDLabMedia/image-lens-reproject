@@ -10,6 +10,19 @@ paramaters. A variety of lenses is supported:
  - Equisolid (Fisheye)
  - Equidistant (Fisheye)
 
+## Build
+You will need a C++ compiler and CMake. All other dependencies are included as
+submodules.
+
+```sh
+git clone https://github.com/IDLabMedia/image-lens-reproject.git
+cd image-lens-reproject
+git submodule update --init --recursive
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make -j4
+```
+
 ## CLI interface
 
 ```
