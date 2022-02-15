@@ -43,6 +43,8 @@ Usage:
                               reproject.
   -o, --output-dir file       Output directory to put the reprojected 
                               images.
+      --exr                   Output EXR files. Color and depth.
+      --png                   Output PNG files. Color only.
 
  Output optics options:
       --rectilinear focal_length,sensor_width
