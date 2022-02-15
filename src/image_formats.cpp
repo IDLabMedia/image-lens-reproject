@@ -1,10 +1,12 @@
 #include "image_formats.hpp"
 
 #include <ImfArray.h>
+#include <ImfChannelList.h>
+#include <ImfFrameBuffer.h>
+#include <ImfHeader.h>
 #include <ImfInputFile.h>
 #include <ImfNamespace.h>
-#include <ImfRgba.h>
-#include <ImfRgbaFile.h>
+#include <ImfOutputFile.h>
 #include <lodepng.h>
 
 #include <cmath>
@@ -15,6 +17,7 @@ namespace reproject {
 
 void save_png(const reproject::Image &output, std::string output_file) {
   ZoneScoped;
+
   uint8_t *image_buf = new uint8_t[output.width * output.height * 4];
   float vmax = 0.0f;
   float vmin = 1.0f;
@@ -40,7 +43,6 @@ void save_png(const reproject::Image &output, std::string output_file) {
     lodepng::encode(output_file.c_str(), image_buf, output.width,
                     output.height);
   }
-  //std::printf("min: %f  max: %f\n", vmin, vmax);
   delete[] image_buf;
 }
 
@@ -70,56 +72,146 @@ reproject::Image read_png(std::string input_file) {
       }
     }
   }
+  input.data_layout = reproject::RGB;
 
   return input;
-}
-
-static void readRgba1(const char fileName[], Imf::Array2D<Imf::Rgba> &pixels,
-                      int &width, int &height) {
-  ZoneScoped;
-  //
-  // Read an RGBA image using class RgbaInputFile:
-  //
-  //	- open the file
-  //	- allocate memory for the pixels
-  //	- describe the memory layout of the pixels
-  //	- read the pixels from the file
-  //
-
-  Imf::RgbaInputFile file(fileName);
-  Imath::Box2i dw = file.dataWindow();
-
-  width = dw.max.x - dw.min.x + 1;
-  height = dw.max.y - dw.min.y + 1;
-  pixels.resizeErase(height, width);
-
-  file.setFrameBuffer(&pixels[0][0] - dw.min.x - dw.min.y * width, 1, width);
-  file.readPixels(dw.min.y, dw.max.y);
 }
 
 reproject::Image read_exr(std::string input_file) {
   ZoneScoped;
-  Imf::Array2D<Imf::Rgba> data;
-  int width, height;
-  readRgba1(input_file.c_str(), data, width, height);
+  using namespace Imf;
+
+  InputFile file(input_file.c_str());
+  Imath::Box2i dw = file.header().dataWindow();
 
   reproject::Image input;
-  input.width = width;
-  input.height = height;
-  input.channels = 3;
-  input.data = new float[input.width * input.height * input.channels];
+  input.width = dw.max.x - dw.min.x + 1;
+  input.height = dw.max.y - dw.min.y + 1;
+  input.channels = 0;
+
+  std::vector<half *> halfData;
+  std::vector<std::string> channel_names;
+
+  FrameBuffer fb;
+  bool found_A = false;
+  bool found_Z = false;
+
+  // Figure out which channels are present
+  const ChannelList &channels = file.header().channels();
+  for (auto it = channels.begin(); it != channels.end(); ++it) {
+    std::string chname = it.name();
+    channel_names.push_back(chname);
+    const Channel &channel = it.channel();
+
+    found_A |= chname == "A";
+    found_Z |= chname == "Z";
+  }
+
+  if (found_A && found_Z) {
+    input.data_layout = reproject::RGBAZ;
+  } else if (found_A) {
+    input.data_layout = reproject::RGBA;
+  } else if (found_Z) {
+    input.data_layout = reproject::RGBZ;
+  } else {
+    input.data_layout = reproject::RGB;
+  }
+
+  // Prepare the frame buffer for the selected channels.
+  input.channels = channel_names.size();
+  for (auto channel_name : channel_names) {
+    ZoneScopedN("prepare_channel");
+    half *buf = new half[input.width * input.height];
+    size_t dts = sizeof(*buf);
+    fb.insert(channel_name, Slice{HALF, (char *)buf, dts, input.width * dts});
+    halfData.push_back(buf);
+  }
+
+  {
+    ZoneScopedN("read_pixels()");
+    file.setFrameBuffer(fb);
+    file.readPixels(dw.min.y, dw.max.y);
+  }
+
   {
     ZoneScopedN("convert EXR to float buffer");
-    for (int y = 0; y < input.height; ++y) {
-      for (int x = 0; x < input.width; ++x) {
-        Imf::Rgba p = data[y][x];
-        input.data[(y * input.width + x) * input.channels + 0] = float(p.r);
-        input.data[(y * input.width + x) * input.channels + 1] = float(p.g);
-        input.data[(y * input.width + x) * input.channels + 2] = float(p.b);
+    input.data = new float[input.width * input.height * input.channels];
+    for (int c = 0; c < input.channels; ++c) {
+      std::string chname = channel_names[c];
+      int dstC = 0;
+
+      // clang-format off
+      if (chname == "R") dstC = 0;
+      if (chname == "G") dstC = 1;
+      if (chname == "B") dstC = 2;
+      if (input.data_layout == RGBA) {
+        if (chname == "A") dstC = 3;
+        if (chname == "Z") dstC = -1000;
+      } else if (input.data_layout == RGBZ) {
+        if (chname == "A") dstC = -1000;
+        if (chname == "Z") dstC = 3;
+      } else if (input.data_layout == RGBAZ) {
+        if (chname == "A") dstC = 3;
+        if (chname == "Z") dstC = 4;
+      }
+      // clang-format off
+
+      for (int y = 0; y < input.height; ++y) {
+        for (int x = 0; x < input.width; ++x) {
+          int ro = y * input.width + x;
+          input.data[(y * input.width + x) * input.channels + dstC] =
+              float(halfData[c][ro]);
+        }
       }
     }
   }
+
+  for (half *ptr : halfData) {
+    ZoneScopedN("free_f16");
+    delete[] ptr;
+  }
+
   return input;
+}
+
+void save_exr(const reproject::Image &output, std::string output_file) {
+  ZoneScoped;
+  using namespace Imf;
+
+  std::vector<std::string> channel_names = {"R", "G", "B", "A", "Z"};
+  if (output.channels > channel_names.size()) {
+    throw std::runtime_error("cannot save exr with more than 5 channels.");
+  }
+  std::vector<half *> halfData;
+  FrameBuffer fb;
+  Header header(output.width, output.height);
+  for (int i = 0; i < output.channels; ++i) {
+    ZoneScopedN("convert_f32_to_f16");
+    header.channels().insert(channel_names[i], Channel(HALF));
+    half *buf = new half[output.width * output.height];
+    for (int y = 0; y < output.height; ++y) {
+      for (int x = 0; x < output.width; ++x) {
+        int ro = (output.width * y + x) * output.channels + i;
+        buf[y * output.width + x] = output.data[ro];
+      }
+    }
+    size_t dts = sizeof(*buf);
+    Slice slice{HALF, (char *)buf, dts, dts * output.width};
+    fb.insert(channel_names[i], slice);
+    halfData.push_back(buf);
+  }
+
+  {
+    ZoneScopedN("write");
+    OutputFile of(output_file.c_str(), header);
+    of.setFrameBuffer(fb);
+    of.writePixels(output.height);
+  }
+
+  for (half *ptr : halfData) {
+    ZoneScopedN("free_f16");
+    delete[] ptr;
+  }
 }
 
 } // namespace reproject

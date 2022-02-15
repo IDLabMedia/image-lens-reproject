@@ -31,12 +31,14 @@ target_link_libraries(OpenEXRCore PUBLIC Imath::Imath)
 add_library(ctpl INTERFACE)
 target_include_directories(ctpl INTERFACE "lib/ctpl/")
 
+set(JSON_MultipleHeaders ON CACHE BOOL "" FORCE)
 add_subdirectory(lib/json)
 
 add_executable(reproject
     "src/main.cpp"
     "src/reproject.cpp"
     "src/image_formats.cpp"
+    "src/config.cpp"
     )
 target_include_directories(reproject PUBLIC "src")
 target_link_libraries(reproject PUBLIC
