@@ -122,6 +122,7 @@ ignores them, but will copy them over to the output JSON.)
   },
   "resolution": [ 2048, 2048 ],
   "sensor_size": [ 36.0, 36.0 ]
+}
 ```
 Note: This lens is not expressed by a focal length. Instead the lens perfectly
 fits a circle of projection on the sensor. The equidistant lens is only
@@ -138,6 +139,7 @@ specified by a field of view (fov).
   },
   "resolution": [ 2048, 2048 ],
   "sensor_size": [ 36.0, 36.0 ]
+}
 ```
 Note: `lens` is the focal length of the lens, expressed in the same unit as the
 `sensor_size` element (typically millimeters). The naming is taken from Blender.
@@ -145,4 +147,4 @@ Note: `lens` is the focal length of the lens, expressed in the same unit as the
 
 ## License
 
-See the `LICENSE` file.
+See the [`LICENSE`](https://github.com/IDLabMedia/image-lens-reproject/blob/main/LICENSE) file.
