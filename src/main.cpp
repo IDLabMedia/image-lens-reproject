@@ -12,6 +12,8 @@
 
 namespace fs = ghc::filesystem;
 
+void submit(ctpl::thread_pool &pool, fs::path &filename) {}
+
 int main(int argc, char **argv) {
   // clang-format off
   cxxopts::Options options(argv[0],
@@ -26,6 +28,8 @@ int main(int argc, char **argv) {
                    "settings of the input images.",
      cxxopts::value<std::string>(), "json-file")
     ("i,input-dir", "Input directory containing images to reproject.",
+     cxxopts::value<std::string>(), "file")
+    ("single", "A single input file to convert.",
      cxxopts::value<std::string>(), "file")
     ("o,output-dir", "Output directory to put the reprojected images.",
      cxxopts::value<std::string>(), "file")
@@ -72,6 +76,7 @@ int main(int argc, char **argv) {
   cxxopts::ParseResult result;
   int num_threads = 1;
   int num_samples = 1;
+  std::string input_single;
   std::string input_dir;
   std::string output_dir;
   std::string input_cfg_file;
@@ -84,7 +89,20 @@ int main(int argc, char **argv) {
       std::printf("%s\n", options.help().c_str());
       return 0;
     }
-    input_dir = result["input-dir"].as<std::string>();
+    if (result.count("input-dir") && result.count("single")) {
+      std::printf("Error: cannot specify both --input-dir and --single.\n");
+      std::printf("%s\n", options.help().c_str());
+      return 1;
+    } else {
+      if (result.count("input-dir")) {
+        input_dir = result["input-dir"].as<std::string>();
+      } else if (result.count("single")) {
+        input_single = result["single"].as<std::string>();
+      } else {
+        std::printf("Error: No input specified.\n");
+        return 1;
+      }
+    }
     output_dir = result["output-dir"].as<std::string>();
     input_cfg_file = result["input-cfg"].as<std::string>();
     output_cfg_file = result["output-cfg"].as<std::string>();
@@ -222,62 +240,70 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  fs::directory_iterator end;
-  fs::directory_iterator it{fs::path(input_dir)};
-
   int count = 0;
   std::atomic_int done_count{0};
   ctpl::thread_pool pool(num_threads);
-  for (; it != end; ++it) {
-    if (it->is_regular_file()) {
-      fs::path p = *it;
-      if (p.extension() == ".exr" || p.extension() == ".png") {
-        count++;
-        pool.push([p, num_samples, interpolation, output_dir, scale, input_lens,
-                   output_lens, &done_count, &count, store_exr,
-                   store_png](int) {
-          try {
-            reproject::Image input;
-            if (p.extension() == ".exr") {
-              input = reproject::read_exr(p.string());
-            } else if (p.extension() == ".png") {
-              input = reproject::read_png(p.string());
-            }
-            input.lens = input_lens;
 
-            reproject::Image output;
-            output.lens = output_lens;
+  std::function<void(std::string)> submit_file = [&](fs::path p) {
+    pool.push([p, num_samples, interpolation, output_dir, scale, input_lens,
+               output_lens, &done_count, &count, store_exr, store_png](int) {
+      try {
+        reproject::Image input;
+        if (p.extension() == ".exr") {
+          input = reproject::read_exr(p.string());
+        } else if (p.extension() == ".png") {
+          input = reproject::read_png(p.string());
+        }
+        input.lens = input_lens;
 
-            output.width = int(input.width * scale / 100);
-            output.height = int(input.height * scale / 100);
-            output.channels = input.channels;
-            output.data =
-                new float[output.width * output.height * output.channels];
+        reproject::Image output;
+        output.lens = output_lens;
 
-            reproject::reproject(&input, &output, num_samples, interpolation);
+        output.width = int(input.width * scale / 100);
+        output.height = int(input.height * scale / 100);
+        output.channels = input.channels;
+        output.data = new float[output.width * output.height * output.channels];
 
-            fs::path output_path = output_dir / p.filename();
+        reproject::reproject(&input, &output, num_samples, interpolation);
 
-            if (store_png) {
-              reproject::save_png(
-                  output, output_path.replace_extension(".png").string());
-            }
-            if (store_exr) {
-              reproject::save_exr(
-                  output, output_path.replace_extension(".exr").string());
-            }
+        fs::path output_path = output_dir / p.filename();
 
-            delete[] input.data;
-            delete[] output.data;
+        if (store_png) {
+          reproject::save_png(output,
+                              output_path.replace_extension(".png").string());
+        }
+        if (store_exr) {
+          reproject::save_exr(output,
+                              output_path.replace_extension(".exr").string());
+        }
 
-            int dc = ++done_count;
-            std::printf("%4d / %4d\n", dc, count);
-          } catch (const std::exception &e) {
-            std::printf("Error: %s\n", e.what());
-          }
-        });
+        delete[] input.data;
+        delete[] output.data;
+
+        int dc = ++done_count;
+        std::printf("%4d / %4d\n", dc, count);
+      } catch (const std::exception &e) {
+        std::printf("Error: %s\n", e.what());
+      }
+    });
+    count++;
+  };
+
+  if (!input_dir.empty()) {
+    fs::directory_iterator end;
+    fs::directory_iterator it{fs::path(input_dir)};
+
+    for (; it != end; ++it) {
+      if (it->is_regular_file()) {
+        fs::path p = *it;
+        if (p.extension() == ".exr" || p.extension() == ".png") {
+          submit_file(p);
+        }
       }
     }
+  } else if (!input_single.empty()) {
+    fs::path p{input_single};
+    submit_file(p);
   }
 
   pool.stop(true);
