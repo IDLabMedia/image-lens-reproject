@@ -27,7 +27,6 @@ void save_png(const reproject::Image &output, std::string output_file) {
         float s = output.data[((y * output.width) + x) * output.channels + c];
         vmax = std::max(vmax, s);
         vmin = std::min(vmin, s);
-        // s = s / (s + 1.0f);
         s = std::max(0.0f, std::min(1.0f, s));
         s = std::pow(s, 1.0f / 2.2f);
         uint8_t d = uint8_t(255.9f * s);

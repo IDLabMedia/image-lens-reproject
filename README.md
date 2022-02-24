@@ -41,6 +41,7 @@ Usage:
                               settings of the input images.
   -i, --input-dir file        Input directory containing images to 
                               reproject.
+      --single file           A single input file to convert.
   -o, --output-dir file       Output directory to put the reprojected 
                               images.
       --exr                   Output EXR files. Color and depth.

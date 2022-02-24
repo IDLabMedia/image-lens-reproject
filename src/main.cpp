@@ -45,12 +45,12 @@ int main(int argc, char **argv) {
     ("bl", "Bilinear interpolation")
     ("bc", "Bicubic interpolation (default)")
 
-    ("scale", "Output scale, as a percentage of the input size. "
+    ("scale", "Output scale, as a fraction of the input size. "
      "It is recommended to increase --samples to prevent aliassing "
-     "in case you are downscaling. Eg: --scale 50 --samples 2 "
-     "or --scale 33.334 --samples 3 or --scale 25 --samples 4. "
+     "in case you are downscaling. Eg: --scale 0.5 --samples 2 "
+     "or --scale 0.33334 --samples 3 or --scale 0.25 --samples 4. "
      "Final dimensions are rounded towards zero.",
-     cxxopts::value<double>()->default_value("100"), "percentage")
+     cxxopts::value<double>()->default_value("1.0"), "percentage")
     ;
 
   options.add_options("Output optics")
@@ -64,6 +64,17 @@ int main(int argc, char **argv) {
                     "fov value.",
      cxxopts::value<std::string>(), "fov")
     ;
+
+  options.add_options("Color processing")
+      ("exposure", "Multiplicative factor to brigthen or darken "
+                   "the pictures.",
+       cxxopts::value<double>()->default_value("1.0"), "factor")
+      ("reinhard", "Use reinhard tonemapping with given maximum value "
+                   "(after exposure processing) on the output images.",
+       cxxopts::value<double>()->default_value("1.0"), "max")
+      ;
+
+
 
   options.add_options("Runtime")
     ("j,parallel", "Number of parallal images to process.",
@@ -82,6 +93,8 @@ int main(int argc, char **argv) {
   std::string input_cfg_file;
   std::string output_cfg_file;
   double scale;
+  double exposure = 1.0;
+  double reinhard = 1.0;
   bool dry_run = false;
   try {
     result = options.parse(argc, argv);
@@ -109,6 +122,8 @@ int main(int argc, char **argv) {
     num_samples = result["samples"].as<int>();
     num_threads = result["parallel"].as<int>();
     scale = result["scale"].as<double>();
+    exposure = result["exposure"].as<double>();
+    reinhard = result["reinhard"].as<double>();
   } catch (cxxopts::OptionParseException &e) {
     std::printf("%s\n\n%s\n", e.what(), options.help().c_str());
     return 1;
@@ -218,8 +233,8 @@ int main(int argc, char **argv) {
 
   // store in out_cfg
   reproject::store_lens_info_in_config(output_lens, out_cfg);
-  cfg["resolution"][0] = int(res_x * scale / 100);
-  cfg["resolution"][1] = int(res_y * scale / 100);
+  cfg["resolution"][0] = int(res_x * scale);
+  cfg["resolution"][1] = int(res_y * scale);
 
   if (output_lens_types_found > 1) {
     std::printf("Error: only specify one output lens type: [--rectilinear, "
@@ -246,7 +261,8 @@ int main(int argc, char **argv) {
 
   std::function<void(std::string)> submit_file = [&](fs::path p) {
     pool.push([p, num_samples, interpolation, output_dir, scale, input_lens,
-               output_lens, &done_count, &count, store_exr, store_png](int) {
+               output_lens, &done_count, &count, exposure, reinhard, store_exr,
+               store_png](int) {
       try {
         reproject::Image input;
         if (p.extension() == ".exr") {
@@ -259,12 +275,14 @@ int main(int argc, char **argv) {
         reproject::Image output;
         output.lens = output_lens;
 
-        output.width = int(input.width * scale / 100);
-        output.height = int(input.height * scale / 100);
+        output.width = int(input.width * scale);
+        output.height = int(input.height * scale);
         output.channels = input.channels;
         output.data = new float[output.width * output.height * output.channels];
 
         reproject::reproject(&input, &output, num_samples, interpolation);
+
+        reproject::post_process(&output, exposure, reinhard);
 
         fs::path output_path = output_dir / p.filename();
 

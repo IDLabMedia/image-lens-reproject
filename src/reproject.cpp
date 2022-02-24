@@ -262,4 +262,20 @@ void reproject(const Image *in, Image *out, int num_samples, Interpolation im) {
     }
 }
 
+void post_process(const Image *img, float exposure, float reinhard) {
+    int ch = std::min(img->channels, 3);
+    int i = 0;
+    for (int y = 0; y < img->height; ++y) {
+        for (int x = 0; x < img->width; ++x) {
+            for (int c = 0; c < ch; ++c) {
+                float v = img->data[i];
+                v *= exposure;
+                v = v * (1.0f + v / (reinhard * reinhard)) / (1.0f + v);
+                img->data[i] = v;
+                i++;
+            }
+        }
+    }
+}
+
 }  // namespace reproject
