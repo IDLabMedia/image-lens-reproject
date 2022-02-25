@@ -34,6 +34,13 @@ make -j4
 Usage:
   ./reproject [OPTION...]
 
+ Color processing options:
+      --exposure EV   Exposure compensation in stops (EV) to brigthen or 
+                      darken the pictures. (default: 0.0)
+      --reinhard max  Use reinhard tonemapping with given maximum value 
+                      (after exposure processing) on the output images. 
+                      (default: 1.0)
+
  Input/output options:
       --input-cfg json-file   Input JSON file containing lens and camera 
                               settings of the input images.
@@ -70,13 +77,13 @@ Usage:
       --nn                Nearest neighbor interpolation
       --bl                Bilinear interpolation
       --bc                Bicubic interpolation (default)
-      --scale percentage  Output scale, as a percentage of the input size. 
-                          It is recommended to increase --samples to 
-                          prevent aliassing in case you are downscaling. 
-                          Eg: --scale 50 --samples 2 or --scale 33.334 
-                          --samples 3 or --scale 25 --samples 4. Final 
+      --scale percentage  Output scale, as a fraction of the input size. It 
+                          is recommended to increase --samples to prevent 
+                          aliassing in case you are downscaling. Eg: 
+                          --scale 0.5 --samples 2 or --scale 0.33334 
+                          --samples 3 or --scale 0.25 --samples 4. Final 
                           dimensions are rounded towards zero. (default: 
-                          100)
+                          1.0)
 ```
 
 ### Configuration JSON
