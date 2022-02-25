@@ -9,7 +9,7 @@ lens-reproject is a tool to reproject images taken with a known lens to a new
 lens. The process is unprojects every pixel coordinate back to the light ray in
 spherical coordinates -- with the origin set to the center of projection --
 after which it projects the light ray back onto the sensor using the new lens
-paramaters. A variety of lenses is supported:
+parameters. A variety of lenses is supported:
 
  - Rectilinear (The default perspective projection lenses).
  - Equisolid (Fisheye)
@@ -35,21 +35,21 @@ Usage:
   ./reproject [OPTION...]
 
  Color processing options:
-      --exposure EV   Exposure compensation in stops (EV) to brigthen or 
+      --exposure EV   Exposure compensation in stops (EV) to brigthen or
                       darken the pictures. (default: 0.0)
-      --reinhard max  Use reinhard tonemapping with given maximum value 
-                      (after exposure processing) on the output images. 
+      --reinhard max  Use reinhard tonemapping with given maximum value
+                      (after exposure processing) on the output images.
                       (default: 1.0)
 
  Input/output options:
-      --input-cfg json-file   Input JSON file containing lens and camera 
+      --input-cfg json-file   Input JSON file containing lens and camera
                               settings of the input images.
-      --output-cfg json-file  Output JSON file containing lens and camera 
+      --output-cfg json-file  Output JSON file containing lens and camera
                               settings of the input images.
-  -i, --input-dir file        Input directory containing images to 
+  -i, --input-dir file        Input directory containing images to
                               reproject.
       --single file           A single input file to convert.
-  -o, --output-dir file       Output directory to put the reprojected 
+  -o, --output-dir file       Output directory to put the reprojected
                               images.
       --exr                   Output EXR files. Color and depth.
       --png                   Output PNG files. Color only.
@@ -57,33 +57,33 @@ Usage:
  Output optics options:
       --no-reproject            Do not reproject at all.
       --rectilinear focal_length,sensor_width
-                                Output rectilinear images with given 
+                                Output rectilinear images with given
                                 focal_length,sensor_width tuple.
       --equisolid focal_length,sensor_width,fov
-                                Output equisolid images with given 
+                                Output equisolid images with given
                                 focal_length,sensor_width,fov tuple.
-      --equidistant fov         Output equidistant images with given fov 
+      --equidistant fov         Output equidistant images with given fov
                                 value.
 
  Runtime options:
-  -j, --parallel threads  Number of parallal images to process. (default: 
+  -j, --parallel threads  Number of parallel images to process. (default:
                           1)
-      --dry-run           Do not actually reproject images. Only produce 
+      --dry-run           Do not actually reproject images. Only produce
                           config.
   -h, --help              Show help
 
  Sampling options:
-  -s, --samples number    Number of samples per dimension for interpolating 
+  -s, --samples number    Number of samples per dimension for interpolating
                           (default: 1)
       --nn                Nearest neighbor interpolation
       --bl                Bilinear interpolation
       --bc                Bicubic interpolation (default)
-      --scale percentage  Output scale, as a fraction of the input size. It 
-                          is recommended to increase --samples to prevent 
-                          aliassing in case you are downscaling. Eg: 
-                          --scale 0.5 --samples 2 or --scale 0.33334 
-                          --samples 3 or --scale 0.25 --samples 4. Final 
-                          dimensions are rounded towards zero. (default: 
+      --scale percentage  Output scale, as a fraction of the input size. It
+                          is recommended to increase --samples to prevent
+                          aliassing in case you are downscaling. Eg:
+                          --scale 0.5 --samples 2 or --scale 0.33334
+                          --samples 3 or --scale 0.25 --samples 4. Final
+                          dimensions are rounded towards zero. (default:
                           1.0)
 ```
 

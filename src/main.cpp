@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
 
 
   options.add_options("Runtime")
-    ("j,parallel", "Number of parallal images to process.",
+    ("j,parallel", "Number of parallel images to process.",
      cxxopts::value<int>()->default_value("1"), "threads")
     ("dry-run", "Do not actually reproject images. Only produce config.")
     ("h,help", "Show help")
