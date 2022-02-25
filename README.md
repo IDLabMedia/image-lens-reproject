@@ -55,6 +55,7 @@ Usage:
       --png                   Output PNG files. Color only.
 
  Output optics options:
+      --no-reproject            Do not reproject at all.
       --rectilinear focal_length,sensor_width
                                 Output rectilinear images with given 
                                 focal_length,sensor_width tuple.

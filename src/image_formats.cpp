@@ -200,6 +200,8 @@ void save_exr(const reproject::Image &output, std::string output_file) {
     halfData.push_back(buf);
   }
 
+  header.zipCompressionLevel() = 9;
+
   {
     ZoneScopedN("write");
     OutputFile of(output_file.c_str(), header);

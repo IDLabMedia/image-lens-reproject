@@ -54,6 +54,7 @@ int main(int argc, char **argv) {
     ;
 
   options.add_options("Output optics")
+    ("no-reproject", "Do not reproject at all.")
     ("rectilinear", "Output rectilinear images with given "
                     "focal_length,sensor_width tuple.",
      cxxopts::value<std::string>(), "focal_length,sensor_width")
@@ -95,6 +96,7 @@ int main(int argc, char **argv) {
   double exposure = 1.0;
   double reinhard = 1.0;
   bool dry_run = false;
+  bool reproject = true;
   try {
     result = options.parse(argc, argv);
     if (result.count("help")) {
@@ -123,6 +125,9 @@ int main(int argc, char **argv) {
     scale = result["scale"].as<double>();
     exposure = std::pow(2.0, result["exposure"].as<double>());
     reinhard = result["reinhard"].as<double>();
+    if (result.count("no-reproject")) {
+      reproject = false;
+    }
   } catch (cxxopts::OptionParseException &e) {
     std::printf("%s\n\n%s\n", e.what(), options.help().c_str());
     return 1;
@@ -230,6 +235,11 @@ int main(int argc, char **argv) {
     output_lens_types_found++;
   }
 
+  if (!reproject) {
+    output_lens = input_lens;
+    output_lens_types_found++;
+  }
+
   // store in out_cfg
   reproject::store_lens_info_in_config(output_lens, out_cfg);
   cfg["resolution"][0] = int(res_x * scale);
@@ -237,7 +247,7 @@ int main(int argc, char **argv) {
 
   if (output_lens_types_found > 1) {
     std::printf("Error: only specify one output lens type: [--rectilinear, "
-                "--equisolid, --equidistant].\n");
+                "--equisolid, --equidistant, --no-reproject].\n");
     return 1;
   }
 
@@ -260,8 +270,9 @@ int main(int argc, char **argv) {
 
   std::function<void(std::string)> submit_file = [&](fs::path p) {
     pool.push([p, num_samples, interpolation, output_dir, scale, input_lens,
-               output_lens, &done_count, &count, exposure, reinhard, store_exr,
-               store_png](int) {
+               output_lens, &done_count, &count, reproject, exposure, reinhard,
+               store_exr, store_png](int) {
+      ZoneScopedN("process_file");
       try {
         reproject::Image input;
         if (p.extension() == ".exr") {
@@ -277,11 +288,20 @@ int main(int argc, char **argv) {
         output.width = int(input.width * scale);
         output.height = int(input.height * scale);
         output.channels = input.channels;
+        output.data_layout = input.data_layout;
         output.data = new float[output.width * output.height * output.channels];
 
-        reproject::reproject(&input, &output, num_samples, interpolation);
+        if (!reproject && scale == 1.0) {
+          uint64_t bytes = output.width * output.height;
+          bytes *= output.channels * sizeof(float);
+          std::memcpy(output.data, input.data, bytes);
+        } else {
+          reproject::reproject(&input, &output, num_samples, interpolation);
+        }
 
-        reproject::post_process(&output, exposure, reinhard);
+        if (exposure != 1.0 || reinhard != 1.0) {
+          reproject::post_process(&output, exposure, reinhard);
+        }
 
         fs::path output_path = output_dir / p.filename();
 

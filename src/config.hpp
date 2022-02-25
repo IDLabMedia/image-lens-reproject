@@ -9,7 +9,7 @@ enum LensType {
   FISHEYE_EQUIDISTANT,
   FISHEYE_EQUISOLID,
   FISHEYE_STEREOGRAPHIC,
-  EQUIRECTANGULAR_360
+  EQUIRECTANGULAR
 };
 
 struct LensInfo {
@@ -25,6 +25,12 @@ struct LensInfo {
       float focal_length;
       float fov;
     } fisheye_equisolid;
+    struct {
+      float latitude_min;
+      float latitude_max;
+      float longitude_min;
+      float longitude_max;
+    } equirectangular;
   };
   float sensor_width;
   float sensor_height;

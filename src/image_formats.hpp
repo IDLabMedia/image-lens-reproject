@@ -12,4 +12,4 @@ void save_exr(const reproject::Image &img, std::string output_file);
 reproject::Image read_exr(std::string input_file);
 reproject::Image read_png(std::string input_file);
 
-}
+} // namespace reproject
