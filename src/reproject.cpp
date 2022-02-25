@@ -274,6 +274,7 @@ void post_process(const Image *img, float exposure, float reinhard) {
                 img->data[i] = v;
                 i++;
             }
+            i += img->channels - ch;
         }
     }
 }

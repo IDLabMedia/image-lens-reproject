@@ -66,14 +66,13 @@ int main(int argc, char **argv) {
     ;
 
   options.add_options("Color processing")
-      ("exposure", "Multiplicative factor to brigthen or darken "
-                   "the pictures.",
-       cxxopts::value<double>()->default_value("1.0"), "factor")
-      ("reinhard", "Use reinhard tonemapping with given maximum value "
-                   "(after exposure processing) on the output images.",
-       cxxopts::value<double>()->default_value("1.0"), "max")
-      ;
-
+    ("exposure", "Exposure compensation in stops (EV) to brigthen "
+                 "or darken the pictures.",
+     cxxopts::value<double>()->default_value("0.0"), "EV")
+    ("reinhard", "Use reinhard tonemapping with given maximum value "
+                 "(after exposure processing) on the output images.",
+     cxxopts::value<double>()->default_value("1.0"), "max")
+    ;
 
 
   options.add_options("Runtime")
@@ -122,7 +121,7 @@ int main(int argc, char **argv) {
     num_samples = result["samples"].as<int>();
     num_threads = result["parallel"].as<int>();
     scale = result["scale"].as<double>();
-    exposure = result["exposure"].as<double>();
+    exposure = std::pow(2.0, result["exposure"].as<double>());
     reinhard = result["reinhard"].as<double>();
   } catch (cxxopts::OptionParseException &e) {
     std::printf("%s\n\n%s\n", e.what(), options.help().c_str());
@@ -299,7 +298,7 @@ int main(int argc, char **argv) {
         delete[] output.data;
 
         int dc = ++done_count;
-        std::printf("%4d / %4d\n", dc, count);
+        std::printf("%4d / %4d: %s\n", dc, count, p.stem().c_str());
       } catch (const std::exception &e) {
         std::printf("Error: %s\n", e.what());
       }
