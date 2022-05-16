@@ -12,8 +12,6 @@
 
 namespace fs = ghc::filesystem;
 
-void submit(ctpl::thread_pool &pool, fs::path &filename) {}
-
 int main(int argc, char **argv) {
   // clang-format off
   cxxopts::Options options(argv[0],
@@ -77,6 +75,7 @@ int main(int argc, char **argv) {
 
 
   options.add_options("Runtime")
+    ("skip-if-exists", "Skip if the output file already exists.")
     ("j,parallel", "Number of parallel images to process.",
      cxxopts::value<int>()->default_value("1"), "threads")
     ("dry-run", "Do not actually reproject images. Only produce config.")
@@ -97,6 +96,7 @@ int main(int argc, char **argv) {
   double reinhard = 1.0;
   bool dry_run = false;
   bool reproject = true;
+  bool skip_if_exists = false;
   try {
     result = options.parse(argc, argv);
     if (result.count("help")) {
@@ -138,6 +138,9 @@ int main(int argc, char **argv) {
 
   if (result.count("dry-run")) {
     dry_run = true;
+  }
+  if (result.count("skip-if-exists")) {
+    skip_if_exists = true;
   }
 
   bool store_png = false;
@@ -271,9 +274,27 @@ int main(int argc, char **argv) {
   std::function<void(std::string)> submit_file = [&](fs::path p) {
     pool.push([p, num_samples, interpolation, output_dir, scale, input_lens,
                output_lens, &done_count, &count, reproject, exposure, reinhard,
-               store_exr, store_png](int) {
+               store_exr, store_png, skip_if_exists](int) {
       ZoneScopedN("process_file");
       try {
+        fs::path output_path_base = output_dir / p.filename();
+        fs::path output_path_png = output_path_base.replace_extension(".png");
+        fs::path output_path_exr = output_path_base.replace_extension(".exr");
+
+        bool exists = true;
+        if (store_png && !fs::exists(output_path_png)) {
+          exists = false;
+        }
+        if (store_exr && !fs::exists(output_path_exr)) {
+          exists = false;
+        }
+        if (exists && skip_if_exists) {
+          std::printf("Skipping '%s'. Already exists.\n",
+                      output_path_png.c_str());
+          done_count++;
+          return;
+        }
+
         reproject::Image input;
         if (p.extension() == ".exr") {
           input = reproject::read_exr(p.string());
@@ -303,15 +324,11 @@ int main(int argc, char **argv) {
           reproject::post_process(&output, exposure, reinhard);
         }
 
-        fs::path output_path = output_dir / p.filename();
-
         if (store_png) {
-          reproject::save_png(output,
-                              output_path.replace_extension(".png").string());
+          reproject::save_png(output, output_path_png.string());
         }
         if (store_exr) {
-          reproject::save_exr(output,
-                              output_path.replace_extension(".exr").string());
+          reproject::save_exr(output, output_path_exr.string());
         }
 
         delete[] input.data;
