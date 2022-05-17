@@ -35,6 +35,13 @@ int main(int argc, char **argv) {
     ("png", "Output PNG files. Color only.")
     ;
 
+  options.add_options("Filter files")
+    ("filter-prefix", "Only include files starting with",
+     cxxopts::value<std::string>()->default_value(""), "prefix")
+    ("filter-suffix", "Only include files ending with",
+     cxxopts::value<std::string>()->default_value(""), "suffix")
+    ;
+
   options.add_options("Sampling")
     ("s,samples", "Number of samples per dimension for interpolating",
      cxxopts::value<int>()->default_value("1"), "number")
@@ -177,12 +184,32 @@ int main(int argc, char **argv) {
     std::printf("%s", options.help().c_str());
   }
 
+  std::string filter_prefix = result["filter-prefix"].as<std::string>();
+  std::string filter_suffix = result["filter-suffix"].as<std::string>();
+
   nlohmann::json cfg;
   std::ifstream cfg_ifstream{input_cfg_file};
   cfg_ifstream >> cfg;
   cfg_ifstream.close();
 
   nlohmann::json out_cfg = cfg;
+  for (int i = 0; i < out_cfg["frames"].size(); ++i) {
+    std::string name = out_cfg["frames"][i]["name"].get<std::string>();
+
+    bool remove = false;
+    if (name.size() < filter_prefix.size() ||
+        name.size() < filter_suffix.size()) {
+      remove = true;
+    } else if (name.substr(0, filter_prefix.size()) != filter_prefix) {
+      remove = true;
+    } else if (name.substr(name.size() - filter_suffix.size()) !=
+               filter_suffix) {
+      remove = true;
+    }
+    if (remove) {
+      out_cfg["frames"].erase(i--);
+    }
+  }
 
   std::printf("Found camera config: %s\n", cfg["camera"].dump(1).c_str());
   int res_x = cfg["resolution"][0].get<int>();
@@ -347,12 +374,28 @@ int main(int argc, char **argv) {
     fs::directory_iterator end;
     fs::directory_iterator it{fs::path(input_dir)};
 
+    std::vector<fs::path> paths;
     for (; it != end; ++it) {
       if (it->is_regular_file()) {
-        fs::path p = *it;
-        if (p.extension() == ".exr" || p.extension() == ".png") {
-          submit_file(p);
-        }
+        paths.push_back(*it);
+      }
+    }
+    std::sort(paths.begin(), paths.end());
+
+    for (fs::path &p : paths) {
+      std::string fn = p.filename().string();
+      if (fn.size() < filter_prefix.size() ||
+          fn.size() < filter_suffix.size()) {
+        continue;
+      }
+      if (fn.substr(0, filter_prefix.size()) != filter_prefix) {
+        continue;
+      }
+      if (fn.substr(fn.size() - filter_suffix.size()) != filter_suffix) {
+        continue;
+      }
+      if (p.extension() == ".exr" || p.extension() == ".png") {
+        submit_file(p);
       }
     }
   } else if (!input_single.empty()) {
