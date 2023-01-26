@@ -24,19 +24,24 @@ jobs:
         include:
           - os: ubuntu-22.04
             outputsuffix: ubuntu-2204
-            zip_custom: --symlinks
+            archive_type: tar
+            archive_extension: tar.gz
           - os: ubuntu-20.04
             outputsuffix: ubuntu-2004
-            zip_custom: --symlinks
+            archive_type: tar
+            archive_extension: tar.gz
           - os: ubuntu-18.04
             outputsuffix: ubuntu-1804
-            zip_custom: --symlinks
+            archive_type: tar
+            archive_extension: tar.gz
           - os: macos-latest
             outputsuffix: mac
-            zip_custom: --symlinks
+            archive_type: tar
+            archive_extension: tar.gz
           - os: windows-latest
             outputsuffix: win
-            zip_custom: ""
+            archive_type: zip
+            archive_extension: zip
 
     steps:
     - uses: actions/checkout@v3
@@ -55,8 +60,8 @@ jobs:
     - name: Archive Release
       uses: thedoctor0/zip-release@0.7.0
       with:
-        type: 'zip'
-        filename: ${{github.workspace}}/build/lens_reproject_x64-avx2_${{ matrix.outputsuffix }}.zip
+        type: ${{matrix.archive_type}}
+        filename: ${{github.workspace}}/build/lens_reproject_x64-avx2_${{ matrix.outputsuffix }}.${{matrix.archive_extension}}
         directory: ${{github.workspace}}/build/bin
         custom: ${{ matrix.zip_custom }}
 
