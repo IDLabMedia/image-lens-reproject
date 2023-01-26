@@ -1,4 +1,4 @@
-name: CMake
+name: build
 
 on:
   push:
@@ -61,8 +61,8 @@ jobs:
       uses: thedoctor0/zip-release@0.7.0
       with:
         type: ${{matrix.archive_type}}
-        filename: ${{github.workspace}}/build/lens_reproject_x64-avx2_${{matrix.outputsuffix}}.${{matrix.archive_extension}}
-        directory: ${{github.workspace}}/build
+        filename: ${{github.workspace}}/lens_reproject_x64-avx2_${{matrix.outputsuffix}}.${{matrix.archive_extension}}
+        directory: ${{github.workspace}}/
         path: ./build/bin
 
     - name: Upload a Build Artifact
@@ -71,12 +71,12 @@ jobs:
         # Artifact name
         name: lens_reproject_${{ matrix.outputsuffix }}
         # A file, directory or wildcard pattern that describes what to upload
-        path: ${{github.workspace}}/build/lens_reproject_x64-avx2_${{matrix.outputsuffix}}.${{matrix.archive_extension}}
+        path: ${{github.workspace}}/lens_reproject_x64-avx2_${{matrix.outputsuffix}}.${{matrix.archive_extension}}
 
     - name: Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: ./build/lens_reproject_x64-avx2_${{matrix.outputsuffix}}.${{matrix.archive_extension}}
+        files: lens_reproject_x64-avx2_${{matrix.outputsuffix}}.${{matrix.archive_extension}}
         generate_release_notes: true
         append_body: true
