@@ -25,8 +25,10 @@ cd image-lens-reproject
 git submodule update --init --recursive
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j4
+cmake --build . --config Release
 ```
+
+You will find the exectable files with the required library files next to in in a `bin/` subdirectory.
 
 ## Updating your local copy from Git
 
