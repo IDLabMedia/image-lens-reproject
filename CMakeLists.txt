@@ -23,6 +23,7 @@ target_include_directories(lodepng PUBLIC "lib/lodepng/")
 add_subdirectory(lib/Imath)
 
 set(OPENEXR_INSTALL OFF CACHE BOOL "" FORCE)
+set(OPENEXR_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(OPENEXR_INSTALL_TOOLS OFF CACHE BOOL "" FORCE)
 set(OPENEXR_INSTALL_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory(lib/openexr)
@@ -34,6 +35,9 @@ target_include_directories(ctpl INTERFACE "lib/ctpl/")
 set(JSON_MultipleHeaders ON CACHE BOOL "" FORCE)
 add_subdirectory(lib/json)
 
+set(CMAKE_SKIP_BUILD_RPATH  FALSE)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+set(CMAKE_INSTALL_RPATH "\$ORIGIN")
 add_executable(reproject
     "src/main.cpp"
     "src/reproject.cpp"
@@ -51,3 +55,14 @@ target_link_libraries(reproject PUBLIC
     ctpl
     nlohmann_json
     )
+set_target_properties(reproject PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+
+
+foreach(LIBRARY OpenEXRCore OpenEXR Imath Iex IlmThread)
+  set_target_properties(${LIBRARY} PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endforeach()
