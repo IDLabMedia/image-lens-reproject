@@ -70,7 +70,11 @@ void store_lens_info_in_config(const LensInfo &ol, nlohmann::json &out_cfg) {
     float proj[16] = {0.0f};
     proj[0] = 2.0f * olr.focal_length / ol.sensor_width;
     proj[5] = 2.0f * olr.focal_length / ol.sensor_height;
-    proj[15] = 1.0f;
+    proj[14] = -1.0f;
+    // Invent some near and far plane values, and put them in the matrix.
+    float near = 0.1f, far = 100.0f;
+    proj[10] = -(far + near) / (far - near);
+    proj[11] = -2.0f * far * near / (far - near);
     for (int r = 0; r < 4; ++r) {
       out_cfg["camera"]["projection_matrix"].push_back(nlohmann::json::array());
       for (int c = 0; c < 4; ++c) {

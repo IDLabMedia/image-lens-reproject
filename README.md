@@ -1,5 +1,5 @@
 # Image Lens Reprojection Tool
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/IDLabMedia/image-lens-reproject/CMake)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/IDLabMedia/image-lens-reproject/cmake.yml?branch=main)
 [![GitHub license](https://img.shields.io/github/license/IDLabMedia/image-lens-reproject)](https://github.com/IDLabMedia/image-lens-reproject/blob/main/LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/IDLabMedia/image-lens-reproject)](https://github.com/IDLabMedia/image-lens-reproject/stargazers)
 
@@ -26,6 +26,13 @@ git submodule update --init --recursive
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j4
+```
+
+## Updating your local copy from Git
+
+```sh
+git pull origin main
+git submodule update
 ```
 
 ## CLI interface

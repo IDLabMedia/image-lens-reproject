@@ -272,8 +272,8 @@ int main(int argc, char **argv) {
 
   // store in out_cfg
   reproject::store_lens_info_in_config(output_lens, out_cfg);
-  cfg["resolution"][0] = int(res_x * scale);
-  cfg["resolution"][1] = int(res_y * scale);
+  out_cfg["resolution"][0] = int(res_x * scale);
+  out_cfg["resolution"][1] = int(res_y * scale);
 
   if (output_lens_types_found > 1) {
     std::printf("Error: only specify one output lens type: [--rectilinear, "
