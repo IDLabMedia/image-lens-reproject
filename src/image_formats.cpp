@@ -11,7 +11,7 @@
 
 #include <cmath>
 
-#include "Tracy.hpp"
+#include "tracy/Tracy.hpp"
 
 namespace reproject {
 

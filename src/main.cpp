@@ -1,5 +1,5 @@
 #define CXXOPTS_NO_REGEX 1
-#include <Tracy.hpp>
+#include <tracy/Tracy.hpp>
 #include <cxxopts.hpp>
 
 #include "image_formats.hpp"
@@ -135,10 +135,7 @@ int main(int argc, char **argv) {
     if (result.count("no-reproject")) {
       reproject = false;
     }
-  } catch (cxxopts::OptionParseException &e) {
-    std::printf("%s\n\n%s\n", e.what(), options.help().c_str());
-    return 1;
-  } catch (cxxopts::OptionException &e) {
+  } catch (cxxopts::exceptions::exception &e) {
     std::printf("%s\n\n%s\n", e.what(), options.help().c_str());
     return 1;
   }
@@ -395,12 +392,12 @@ int main(int argc, char **argv) {
         continue;
       }
       if (p.extension() == ".exr" || p.extension() == ".png") {
-        submit_file(p);
+        submit_file(p.string());
       }
     }
   } else if (!input_single.empty()) {
     fs::path p{input_single};
-    submit_file(p);
+    submit_file(p.string());
   }
 
   pool.stop(true);

@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include <Tracy.hpp>
+#include <tracy/Tracy.hpp>
 
 namespace reproject {
 
@@ -175,13 +175,15 @@ void reproject_from_to(const Image *in, Image *out, int num_samples) {
 
   int pitch = out->width * out->channels;
   float normalize = (1.0f / (num_samples * num_samples));
+  float *buffer = new float[2 * out->channels];
+  float *sample_accumulator = buffer;
+  float *sample = buffer + out->channels;
   for (int y = 0; y < out->height; ++y) {
     for (int x = 0; x < out->width; ++x) {
       // Center around (0,0)
       float cx = (x + 0.5f) - out->width * 0.5f;
       float cy = (y + 0.5f) - out->height * 0.5f;
 
-      float sample_accumulator[out->channels];
       for (int c = 0; c < out->channels; ++c) {
         sample_accumulator[c] = 0.0f;
       }
@@ -204,7 +206,6 @@ void reproject_from_to(const Image *in, Image *out, int num_samples) {
           sy = (sy - 0.5f) + in->height * 0.5f;
 
           // bilinear interpolation from source image
-          float sample[out->channels];
           sf(in, sx, sy, sample);
 
           for (int c = 0; c < out->channels; ++c) {
@@ -218,6 +219,7 @@ void reproject_from_to(const Image *in, Image *out, int num_samples) {
       }
     }
   }
+  delete[] buffer;
 }
 
 template <from_func_t ff, sample_func_t sf>
