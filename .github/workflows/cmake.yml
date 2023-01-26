@@ -54,7 +54,7 @@ jobs:
       uses: actions/upload-artifact@v3.1.2
       with:
         # Artifact name
-        name: lens_reproject
+        name: lens_reproject_${{ matrix.outputsuffix }}
         # A file, directory or wildcard pattern that describes what to upload
         path: ${{github.workspace}}/build/lens_reproject_x64-avx2_${{ matrix.outputsuffix }}.zip
 
@@ -62,4 +62,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: ${{github.workspace}}/build/lens_reproject_x64-avx2_${{ matrix.outputsuffix }}.zip
+        files: ./build/lens_reproject_x64-avx2_${{ matrix.outputsuffix }}.zip
+        body: "See the release notes below:"
+        generate_release_notes: true
+        append_body: true
