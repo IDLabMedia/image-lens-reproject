@@ -63,6 +63,7 @@ jobs:
         type: ${{matrix.archive_type}}
         filename: ${{github.workspace}}/build/lens_reproject_x64-avx2_${{matrix.outputsuffix}}.${{matrix.archive_extension}}
         directory: ${{github.workspace}}/build
+        path: ./build/bin
 
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v3.1.2
