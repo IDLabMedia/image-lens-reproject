@@ -98,8 +98,8 @@ void store_lens_info_in_config(const LensInfo &ol, nlohmann::json &out_cfg) {
     out_cfg["camera"]["panorama_type"] = "RECTILINEAR";
     out_cfg["camera"]["latitude_min"] = olr.latitude_min;
     out_cfg["camera"]["latitude_max"] = olr.latitude_max;
-    out_cfg["camera"]["longitude_min"] = olr.latitude_min;
-    out_cfg["camera"]["longitude_max"] = olr.latitude_max;
+    out_cfg["camera"]["longitude_min"] = olr.longitude_min;
+    out_cfg["camera"]["longitude_max"] = olr.longitude_max;
   } else {
     throw std::invalid_argument("Unsupported lens type.");
   }

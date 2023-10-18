@@ -7,6 +7,11 @@
 
 namespace reproject {
 
+/**
+ * cx, cy - Center of the pixel.
+ * alpha - Horizontal angle in radians.
+ * theta - Vertical angle in radians.
+ */
 typedef void (*from_func_t)(const LensInfo &li, float img_w, float img_h,
                             float cx, float cy, float &alpha, float &theta);
 typedef void (*to_func_t)(const LensInfo &li, float img_w, float img_h,
@@ -30,10 +35,10 @@ inline void sample_nearest(const Image *img, float sx, float sy, float *out) {
 
 inline void sample_bilinear(const Image *img, float sx, float sy, float *out) {
   // clang-format off
-    int lx = clamp(int(sx)       , 0, img->width - 1);
-    int ux = clamp(int(sx + 1.0f), 0, img->width - 1);
-    int ly = clamp(int(sy)       , 0, img->height - 1);
-    int uy = clamp(int(sy + 1.0f), 0, img->height - 1);
+  int lx = clamp(int(sx)       , 0, img->width - 1);
+  int ux = clamp(int(sx + 1.0f), 0, img->width - 1);
+  int ly = clamp(int(sy)       , 0, img->height - 1);
+  int uy = clamp(int(sy + 1.0f), 0, img->height - 1);
   // clang-format on
 
   float fx = std::max(0.0f, std::min(1.0f, sx - lx));
@@ -60,9 +65,9 @@ inline void sample_bilinear(const Image *img, float sx, float sy, float *out) {
 
 inline float cubicInterpolate(float p[4], float x) {
   // clang-format off
-    return p[1] + 0.5 * x * (p[2] - p[0] + x *
-            (2.0 * p[0] - 5.0 * p[1] + 4.0 * p[2] - p[3] + x *
-             (3.0 * (p[1] - p[2]) + p[3] - p[0])));
+  return p[1] + 0.5 * x * (p[2] - p[0] + x *
+          (2.0 * p[0] - 5.0 * p[1] + 4.0 * p[2] - p[3] + x *
+           (3.0 * (p[1] - p[2]) + p[3] - p[0])));
   // clang-format on
 }
 
@@ -77,16 +82,16 @@ inline float bicubicInterpolate(float p[4][4], float x, float y) {
 
 inline void sample_bicubic(const Image *img, float sx, float sy, float *out) {
   // clang-format off
-    int x0 = clamp(int(sx - 1.0f), 0, img->width - 1);
-    int x1 = clamp(int(sx       ), 0, img->width - 1);
-    int x2 = clamp(int(sx + 1.0f), 0, img->width - 1);
-    int x3 = clamp(int(sx + 2.0f), 0, img->width - 1);
-    int y0 = clamp(int(sy - 1.0f), 0, img->height - 1);
-    int y1 = clamp(int(sy       ), 0, img->height - 1);
-    int y2 = clamp(int(sy + 1.0f), 0, img->height - 1);
-    int y3 = clamp(int(sy + 2.0f), 0, img->height - 1);
+  int x0 = clamp(int(sx - 1.0f), 0, img->width - 1);
+  int x1 = clamp(int(sx       ), 0, img->width - 1);
+  int x2 = clamp(int(sx + 1.0f), 0, img->width - 1);
+  int x3 = clamp(int(sx + 2.0f), 0, img->width - 1);
+  int y0 = clamp(int(sy - 1.0f), 0, img->height - 1);
+  int y1 = clamp(int(sy       ), 0, img->height - 1);
+  int y2 = clamp(int(sy + 1.0f), 0, img->height - 1);
+  int y3 = clamp(int(sy + 2.0f), 0, img->height - 1);
   // clang-format on
-  //
+
   float fx = std::max(0.0f, std::min(1.0f, sx - x1));
   float fy = std::max(0.0f, std::min(1.0f, sy - y1));
 
@@ -96,10 +101,10 @@ inline void sample_bicubic(const Image *img, float sx, float sy, float *out) {
 #define FETCH(xi, yi)                                                          \
   p[xi][yi] = img->data[y##yi * pitch + x##xi * img->channels + c]
     // clang-format off
-        FETCH(0, 0); FETCH(1, 0); FETCH(2, 0); FETCH(3, 0);
-        FETCH(0, 1); FETCH(1, 1); FETCH(2, 1); FETCH(3, 1);
-        FETCH(0, 2); FETCH(1, 2); FETCH(2, 2); FETCH(3, 2);
-        FETCH(0, 3); FETCH(1, 3); FETCH(2, 3); FETCH(3, 3);
+    FETCH(0, 0); FETCH(1, 0); FETCH(2, 0); FETCH(3, 0);
+    FETCH(0, 1); FETCH(1, 1); FETCH(2, 1); FETCH(3, 1);
+    FETCH(0, 2); FETCH(1, 2); FETCH(2, 2); FETCH(3, 2);
+    FETCH(0, 3); FETCH(1, 3); FETCH(2, 3); FETCH(3, 3);
     // clang-format on
 #undef FETCH
 
@@ -169,8 +174,35 @@ inline void spherical_to_equidistant(const LensInfo &li, float img_w,
   cy = r_px * y;
 }
 
+// === EQUIRECTANGULAR ===
+inline void equirectangular_to_spherical(const LensInfo &li, float img_w,
+                                         float img_h, float cx, float cy,
+                                         float &alpha, float &theta) {
+  // clang-format off
+  float longitude_span = li.equirectangular.longitude_max - li.equirectangular.longitude_min;
+  float latitude_span = li.equirectangular.latitude_max - li.equirectangular.latitude_min;
+  float longitude = (cx / img_w) * longitude_span + li.equirectangular.longitude_min;
+  float latitude = (cy / img_h) * latitude_span + li.equirectangular.latitude_min;
+  // clang-format on
+  // TODO: think about latitude up direction vs y-up direction.
+  alpha = longitude;
+  theta = latitude;
+}
+
+inline void spherical_to_equirectangular(const LensInfo &li, float img_w,
+                                         float img_h, float alpha, float theta,
+                                         float &cx, float &cy) {
+  // clang-format off
+  float longitude_span = li.equirectangular.longitude_max - li.equirectangular.longitude_min;
+  float latitude_span = li.equirectangular.latitude_max - li.equirectangular.latitude_min;
+  cx = (alpha - li.equirectangular.longitude_min) / longitude_span * img_w;
+  cy = (theta - li.equirectangular.latitude_min ) / latitude_span  * img_h;
+  // clang-format on
+}
+
 template <from_func_t ff, to_func_t tf, sample_func_t sf>
-void reproject_from_to(const Image *in, Image *out, int num_samples) {
+void reproject_from_to(const Image *in, Image *out, int num_samples,
+                       float alpha_offset, float theta_offset) {
   ZoneScoped;
 
   int pitch = out->width * out->channels;
@@ -198,6 +230,9 @@ void reproject_from_to(const Image *in, Image *out, int num_samples) {
           float theta;
           ff(out->lens, out->width, out->height, scx, scy, alpha, theta);
 
+          alpha += alpha_offset;
+          theta += theta_offset;
+
           float sx, sy; // source coordinate on input image
           tf(in->lens, in->width, in->height, alpha, theta, sx, sy);
 
@@ -222,48 +257,68 @@ void reproject_from_to(const Image *in, Image *out, int num_samples) {
   delete[] buffer;
 }
 
+/**
+ * Reproject a given image with an already-specified lens-type, as per the
+ * templated from_func_t. This function switches over the target lens type.
+ */
 template <from_func_t ff, sample_func_t sf>
-void reproject_from(const Image *in, Image *out, int num_samples) {
+void reproject_from(const Image *in, Image *out, int num_samples,
+                    float alpha_offset, float theta_offset) {
   if (in->lens.type == RECTILINEAR) {
-    reproject_from_to<ff, spherical_to_rectilinear, sf>(in, out, num_samples);
+    reproject_from_to<ff, spherical_to_rectilinear, sf>(
+        in, out, num_samples, alpha_offset, theta_offset);
   } else if (in->lens.type == FISHEYE_EQUIDISTANT) {
-    reproject_from_to<ff, spherical_to_equidistant, sf>(in, out, num_samples);
+    reproject_from_to<ff, spherical_to_equidistant, sf>(
+        in, out, num_samples, alpha_offset, theta_offset);
   } else if (in->lens.type == EQUIRECTANGULAR) {
-    throw std::runtime_error("Equirectangular not supported.");
+    reproject_from_to<ff, spherical_to_equirectangular, sf>(
+        in, out, num_samples, alpha_offset, theta_offset);
   }
 }
 
 template <sample_func_t sf>
-void reproject_with_sample_method(const Image *in, Image *out,
-                                  int num_samples) {
+void reproject_with_sample_method(const Image *in, Image *out, int num_samples,
+                                  float alpha_offset, float theta_offset) {
   if (out->lens.type == RECTILINEAR) {
-    reproject_from<rectilinear_to_spherical, sf>(in, out, num_samples);
+    reproject_from<rectilinear_to_spherical, sf>(in, out, num_samples,
+                                                 alpha_offset, theta_offset);
   } else if (out->lens.type == FISHEYE_EQUIDISTANT) {
-    reproject_from<equidistant_to_spherical, sf>(in, out, num_samples);
+    reproject_from<equidistant_to_spherical, sf>(in, out, num_samples,
+                                                 alpha_offset, theta_offset);
   } else if (out->lens.type == EQUIRECTANGULAR) {
-    throw std::runtime_error("Equirectangular not supported.");
+    reproject_from<equirectangular_to_spherical, sf>(
+        in, out, num_samples, alpha_offset, theta_offset);
   }
 }
 
-void reproject_nearest_neighbor(const Image *in, Image *out, int num_samples) {
+void reproject_nearest_neighbor(const Image *in, Image *out, int num_samples,
+                                float alpha_offset, float theta_offset) {
   ZoneScoped;
-  reproject_with_sample_method<sample_nearest>(in, out, num_samples);
+  reproject_with_sample_method<sample_nearest>(in, out, num_samples,
+                                               alpha_offset, theta_offset);
 }
-void reproject_bilinear(const Image *in, Image *out, int num_samples) {
+void reproject_bilinear(const Image *in, Image *out, int num_samples,
+                        float alpha_offset, float theta_offset) {
   ZoneScoped;
-  reproject_with_sample_method<sample_bilinear>(in, out, num_samples);
+  reproject_with_sample_method<sample_bilinear>(in, out, num_samples,
+                                                alpha_offset, theta_offset);
 }
-void reproject_bicubic(const Image *in, Image *out, int num_samples) {
+void reproject_bicubic(const Image *in, Image *out, int num_samples,
+                       float alpha_offset, float theta_offset) {
   ZoneScoped;
-  reproject_with_sample_method<sample_bicubic>(in, out, num_samples);
+  reproject_with_sample_method<sample_bicubic>(in, out, num_samples,
+                                               alpha_offset, theta_offset);
 }
-void reproject(const Image *in, Image *out, int num_samples, Interpolation im) {
+
+void reproject(const Image *in, Image *out, int num_samples, Interpolation im,
+               float alpha_offset, float theta_offset) {
   if (im == NEAREST) {
-    reproject_nearest_neighbor(in, out, num_samples);
+    reproject_nearest_neighbor(in, out, num_samples, alpha_offset,
+                               theta_offset);
   } else if (im == BILINEAR) {
-    reproject_bilinear(in, out, num_samples);
+    reproject_bilinear(in, out, num_samples, alpha_offset, theta_offset);
   } else if (im == BICUBIC) {
-    reproject_bicubic(in, out, num_samples);
+    reproject_bicubic(in, out, num_samples, alpha_offset, theta_offset);
   }
 }
 

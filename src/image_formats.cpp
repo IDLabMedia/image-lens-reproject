@@ -1,5 +1,6 @@
 #include "image_formats.hpp"
 
+// EXR
 #include <ImfArray.h>
 #include <ImfChannelList.h>
 #include <ImfFrameBuffer.h>
@@ -7,13 +8,138 @@
 #include <ImfInputFile.h>
 #include <ImfNamespace.h>
 #include <ImfOutputFile.h>
+
+// PNG
 #include <lodepng.h>
+
+// JPEG
+#include <jpeglib.h>
 
 #include <cmath>
 
 #include "tracy/Tracy.hpp"
 
 namespace reproject {
+
+// JPEG
+
+reproject::Image read_jpeg(std::string input_file) {
+  struct jpeg_decompress_struct cinfo;
+  struct jpeg_error_mgr jerr;
+  FILE *infile;      /* source file */
+  JSAMPARRAY buffer; /* Output row buffer */
+  int row_stride;    /* physical row width in output buffer */
+
+  if ((infile = fopen(input_file.c_str(), "rb")) == NULL) {
+    fprintf(stderr, "can't open %s\n", input_file.c_str());
+    exit(1);
+  }
+
+  jpeg_create_decompress(&cinfo);
+  cinfo.err = jpeg_std_error(&jerr);
+  jpeg_stdio_src(&cinfo, infile);
+  if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
+    fprintf(stderr, "Can't read JPEG header.\n");
+    exit(1);
+  }
+  jpeg_start_decompress(&cinfo);
+  row_stride = cinfo.output_width * cinfo.output_components;
+  buffer = (*cinfo.mem->alloc_sarray)((j_common_ptr)&cinfo, JPOOL_IMAGE,
+                                      row_stride, 1);
+
+  reproject::Image input;
+  input.width = cinfo.output_width;
+  input.height = cinfo.output_height;
+  input.channels = cinfo.output_components;
+  input.data = new float[input.width * input.height * input.channels];
+
+  while (cinfo.output_scanline < cinfo.output_height) {
+    if (jpeg_read_scanlines(&cinfo, buffer, 1) != 1) {
+      fprintf(stderr, "Can't read JPEG scanline %d.\n", cinfo.output_scanline);
+      exit(1);
+    }
+
+    int y = cinfo.output_scanline - 1;
+    for (int x = 0; x < input.width; ++x) {
+      uint8_t *p = &buffer[0][x * input.channels];
+      int oo = (y * input.width + x) * input.channels;
+      input.data[oo + 0] = std::pow(float(p[0]) / 255.0f, 2.2f);
+      input.data[oo + 1] = std::pow(float(p[1]) / 255.0f, 2.2f);
+      input.data[oo + 2] = std::pow(float(p[2]) / 255.0f, 2.2f);
+    }
+  }
+
+  jpeg_finish_decompress(&cinfo);
+  jpeg_destroy_decompress(&cinfo);
+  fclose(infile);
+
+  return input;
+}
+
+void save_jpeg(const reproject::Image &output, std::string output_file) {
+  struct jpeg_compress_struct cinfo;
+  /* More stuff */
+  FILE *outfile;           /* target file */
+  JSAMPROW row_pointer[1]; /* pointer to JSAMPLE row[s] */
+  int row_stride;          /* physical row width in image buffer */
+
+  jpeg_create_compress(&cinfo);
+  if ((outfile = fopen(output_file.c_str(), "wb")) == NULL) {
+    fprintf(stderr, "can't open %s\n", output_file.c_str());
+    exit(1);
+  }
+  jpeg_stdio_dest(&cinfo, outfile);
+  cinfo.image_width = output.width; /* image width and height, in pixels */
+  cinfo.image_height = output.height;
+  cinfo.input_components =
+      output.channels;            /* # of color components per pixel */
+  cinfo.in_color_space = JCS_RGB; /* colorspace of input image */
+  /* Now use the library's routine to set default compression parameters.
+   * (You must set at least cinfo.in_color_space before calling this,
+   * since the defaults depend on the source color space.)
+   */
+  jpeg_set_defaults(&cinfo);
+  jpeg_set_quality(&cinfo, 95, TRUE /* limit to baseline-JPEG values */);
+  jpeg_start_compress(&cinfo, TRUE);
+  row_stride =
+      output.width * output.channels; /* JSAMPLEs per row in image_buffer */
+
+  JSAMPARRAY buffer; /* Output row buffer */
+  buffer = (*cinfo.mem->alloc_sarray)((j_common_ptr)&cinfo, JPOOL_IMAGE,
+                                      row_stride, 1);
+
+  float vmax = 0.0f;
+  float vmin = 1.0f;
+
+  while (cinfo.next_scanline < cinfo.image_height) {
+    /* jpeg_write_scanlines expects an array of pointers to scanlines.
+     * Here the array is only one element long, but you could pass
+     * more than one scanline at a time if that's more convenient.
+     */
+
+    int y = cinfo.next_scanline;
+    for (int x = 0; x < output.width; ++x) {
+      for (int c = 0; c < output.channels; ++c) {
+        float s = output.data[((y * output.width) + x) * output.channels + c];
+        vmax = std::max(vmax, s);
+        vmin = std::min(vmin, s);
+        s = std::max(0.0f, std::min(1.0f, s));
+        s = std::pow(s, 1.0f / 2.2f);
+        uint8_t d = uint8_t(255.9f * s);
+        buffer[0][x * output.channels + c] = d;
+      }
+    }
+
+    row_pointer[0] = buffer[0];
+    jpeg_write_scanlines(&cinfo, row_pointer, 1);
+  }
+
+  jpeg_finish_compress(&cinfo);
+  fclose(outfile);
+  jpeg_destroy_compress(&cinfo);
+}
+
+// PNG
 
 void save_png(const reproject::Image &output, std::string output_file) {
   ZoneScoped;
@@ -47,6 +173,7 @@ void save_png(const reproject::Image &output, std::string output_file) {
 
 reproject::Image read_png(std::string input_file) {
   ZoneScoped;
+
   std::vector<uint8_t> data;
   lodepng::load_file(data, input_file);
 
@@ -75,6 +202,8 @@ reproject::Image read_png(std::string input_file) {
 
   return input;
 }
+
+// EXR
 
 reproject::Image read_exr(std::string input_file) {
   ZoneScoped;

@@ -35,6 +35,8 @@ target_include_directories(ctpl INTERFACE "lib/ctpl/")
 set(JSON_MultipleHeaders ON CACHE BOOL "" FORCE)
 add_subdirectory(lib/json)
 
+find_package(JPEG REQUIRED)
+
 set(CMAKE_SKIP_BUILD_RPATH  FALSE)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 set(CMAKE_INSTALL_RPATH "\$ORIGIN")
@@ -54,6 +56,7 @@ target_link_libraries(reproject PUBLIC
     OpenEXR::OpenEXR
     ctpl
     nlohmann_json
+    JPEG::JPEG
     )
 set_target_properties(reproject PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
