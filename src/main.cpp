@@ -90,6 +90,8 @@ int parse_equirectangular(const std::string &lstr, float res_x, float res_y,
 int main(int argc, char **argv) {
   ZoneScoped;
 
+  reproject::test_conversion_math();
+
   // clang-format off
   cxxopts::Options options(argv[0],
     "Reprojection tool for producing a variation of lens\n"

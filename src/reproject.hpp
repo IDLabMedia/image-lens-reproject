@@ -25,4 +25,6 @@ void reproject(const Image *in, Image *out, int num_samples,
 
 void post_process(const Image *img, float exposure, float reinhard);
 
+void test_conversion_math();
+
 } // namespace reproject

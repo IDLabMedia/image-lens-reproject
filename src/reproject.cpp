@@ -8,13 +8,17 @@
 namespace reproject {
 
 /**
- * cx, cy - Center of the pixel.
- * alpha - Horizontal angle in radians.
- * theta - Vertical angle in radians.
+ * cx, cy - Center of the pixel, in a coordinate system where the center of the image is at (0,0).
+ * For oaspherical (optical-axis spherical):
+ *    alpha - Rotation around the optical axis.
+ *    theta - Angle away from the optical axis, outward.
+ * For equirectangular:
+ *    alpha - Horizontal angle in radians.
+ *    theta - Vertical angle in radians.
  */
-typedef void (*from_func_t)(const LensInfo &li, float img_w, float img_h,
+typedef void (*target_to_aospherical)(const LensInfo &li, float img_w, float img_h,
                             float cx, float cy, float &alpha, float &theta);
-typedef void (*to_func_t)(const LensInfo &li, float img_w, float img_h,
+typedef void (*aospherical_to_source)(const LensInfo &li, float img_w, float img_h,
                           float cx, float cy, float &alpha, float &theta);
 
 typedef void (*sample_func_t)(const Image *img, float sx, float sy, float *out);
@@ -112,11 +116,44 @@ inline void sample_bicubic(const Image *img, float sx, float sy, float *out) {
   }
 }
 
+// === CONVERSION FROM ALPHA/THETA TO THETA/PHI ===
+
+std::pair<float, float> alpha_theta__to__theta_phi(float alpha, float theta) {
+  // the alpha defines angle around the x-axis, away from the z-axis.
+  // theta the angle away from the x-axis.
+  float r = std::sin(theta);
+  float x = std::cos(theta);
+  float y = std::sin(alpha) * r;
+  float z = std::cos(alpha) * r;
+
+  // float theta_sp = std::atan2(std::sqrt(x * x + y * y), z);
+  // std::printf("len^2: %f\n", x * x + y * y + z * z);
+  float theta_sp = std::atan2(z, x);
+  float phi_sp = std::asin(y);
+
+  return {theta_sp, phi_sp};
+}
+
+std::pair<float, float> theta_phi__to__alpha_theta(float theta, float phi) {
+  float r = std::cos(phi);
+  float x = r * std::cos(theta);
+  float y = std::sin(phi);
+  float z = r * std::sin(theta);
+
+  // the alpha defines angle around the x-axis, away from the z-axis.
+  float alpha_pol = std::atan2(y, z);
+  // theta the angle away from the x-axis.
+  float radius_pol = std::sqrt(y * y + z * z);
+  float theta_pol = std::asin(radius_pol);
+
+  return {alpha_pol, theta_pol};
+}
+
 // === RECTILINEAR ===
 
-inline void rectilinear_to_spherical(const LensInfo &li, float img_w,
-                                     float img_h, float cx, float cy,
-                                     float &alpha, float &theta) {
+inline void rectilinear_to_oaspherical(const LensInfo &li, float img_w,
+                                       float img_h, float cx, float cy,
+                                       float &alpha, float &theta) {
   float r_px = std::sqrt(cx * cx + cy * cy); // [px]
   alpha = std::atan2(cy, cx);
   float factor = li.sensor_width / img_w; // [mm / px]
@@ -125,9 +162,9 @@ inline void rectilinear_to_spherical(const LensInfo &li, float img_w,
   theta = std::atan(r_px / li.rectilinear.focal_length * factor);
 }
 
-inline void spherical_to_rectilinear(const LensInfo &li, float img_w,
-                                     float img_h, float alpha, float theta,
-                                     float &cx, float &cy) {
+inline void oaspherical_to_rectilinear(const LensInfo &li, float img_w,
+                                       float img_h, float alpha, float theta,
+                                       float &cx, float &cy) {
   float x = std::cos(alpha);
   float y = std::sin(alpha);
   float r_mm = li.rectilinear.focal_length * std::tan(theta);
@@ -139,9 +176,9 @@ inline void spherical_to_rectilinear(const LensInfo &li, float img_w,
 
 // === EQUIDISTANT ===
 
-inline void equidistant_to_spherical(const LensInfo &li, float img_w,
-                                     float img_h, float cx, float cy,
-                                     float &alpha, float &theta) {
+inline void equidistant_to_oaspherical(const LensInfo &li, float img_w,
+                                       float img_h, float cx, float cy,
+                                       float &alpha, float &theta) {
   float r_px = std::sqrt(cx * cx + cy * cy); // [px]
 
   float r_mm = r_px / img_w * li.sensor_width;
@@ -152,9 +189,9 @@ inline void equidistant_to_spherical(const LensInfo &li, float img_w,
   alpha = std::atan2(cy, cx);
 }
 
-inline void spherical_to_equidistant(const LensInfo &li, float img_w,
-                                     float img_h, float alpha, float theta,
-                                     float &cx, float &cy) {
+inline void oaspherical_to_equidistant(const LensInfo &li, float img_w,
+                                       float img_h, float alpha, float theta,
+                                       float &cx, float &cy) {
   float x = std::cos(alpha);
   float y = std::sin(alpha);
 
@@ -175,32 +212,54 @@ inline void spherical_to_equidistant(const LensInfo &li, float img_w,
 }
 
 // === EQUIRECTANGULAR ===
+
 inline void equirectangular_to_spherical(const LensInfo &li, float img_w,
                                          float img_h, float cx, float cy,
-                                         float &alpha, float &theta) {
+                                         float &theta, float &phi) {
   // clang-format off
   float longitude_span = li.equirectangular.longitude_max - li.equirectangular.longitude_min;
-  float latitude_span = li.equirectangular.latitude_max - li.equirectangular.latitude_min;
-  float longitude = (cx / img_w) * longitude_span + li.equirectangular.longitude_min;
-  float latitude = (cy / img_h) * latitude_span + li.equirectangular.latitude_min;
+  float latitude_span  = li.equirectangular.latitude_max  - li.equirectangular.latitude_min;
+  float longitude = ((cx / img_w) + 0.5f) * longitude_span + li.equirectangular.longitude_min;
+  float latitude  = ((cy / img_h) + 0.5f) * latitude_span  + li.equirectangular.latitude_min;
   // clang-format on
   // TODO: think about latitude up direction vs y-up direction.
-  alpha = longitude;
-  theta = latitude;
+  theta = longitude;
+  phi = latitude;
 }
 
 inline void spherical_to_equirectangular(const LensInfo &li, float img_w,
-                                         float img_h, float alpha, float theta,
+                                         float img_h, float theta, float phi,
                                          float &cx, float &cy) {
+  constexpr float theta_mod = 2.0f * M_PI;
+  while (theta <= li.equirectangular.longitude_min) theta += theta_mod;
+  while (theta >  li.equirectangular.longitude_max) theta -= theta_mod;
+
   // clang-format off
   float longitude_span = li.equirectangular.longitude_max - li.equirectangular.longitude_min;
-  float latitude_span = li.equirectangular.latitude_max - li.equirectangular.latitude_min;
-  cx = (alpha - li.equirectangular.longitude_min) / longitude_span * img_w;
-  cy = (theta - li.equirectangular.latitude_min ) / latitude_span  * img_h;
+  float latitude_span  = li.equirectangular.latitude_max  - li.equirectangular.latitude_min;
+  cx = ((theta - li.equirectangular.longitude_min) / longitude_span - 0.5f) * img_w;
+  cy = ((phi   - li.equirectangular.latitude_min ) / latitude_span  - 0.5f) * img_h;
   // clang-format on
 }
 
-template <from_func_t ff, to_func_t tf, sample_func_t sf>
+inline void equirectangular_to_oaspherical(const LensInfo &li, float img_w,
+                                           float img_h, float cx, float cy,
+                                           float &alpha, float &theta) {
+  float a, t;
+  equirectangular_to_spherical(li, img_w, img_h, cx, cy, a, t);
+  auto [oaa, oat] = theta_phi__to__alpha_theta(a, t);
+  alpha = oaa;
+  theta = oat;
+}
+
+inline void oaspherical_to_equirectangular(const LensInfo &li, float img_w,
+                                           float img_h, float alpha,
+                                           float theta, float &cx, float &cy) {
+  auto [sp_theta, sp_phi] = alpha_theta__to__theta_phi(alpha, theta);
+  spherical_to_equirectangular(li, img_w, img_h, sp_theta, sp_phi, cx, cy);
+}
+
+template <target_to_aospherical tgt_to_aos, aospherical_to_source aos_to_src, sample_func_t sf>
 void reproject_from_to(const Image *in, Image *out, int num_samples,
                        float alpha_offset, float theta_offset) {
   ZoneScoped;
@@ -226,15 +285,36 @@ void reproject_from_to(const Image *in, Image *out, int num_samples,
         for (int ssy = 0; ssy < num_samples; ++ssy) {
           float scy = cy + (ssy + 1.0f) / (num_samples + 1.0f) - 0.5f;
 
-          float alpha;
-          float theta;
-          ff(out->lens, out->width, out->height, scx, scy, alpha, theta);
+          float oa_alpha;
+          float oa_theta;
+          tgt_to_aos(out->lens, out->width, out->height, scx, scy, oa_alpha, oa_theta);
 
-          alpha += alpha_offset;
-          theta += theta_offset;
+          if (alpha_offset != 0.0f || theta_offset != 0.0f) {
+            auto [sp_theta, sp_phi] =
+                alpha_theta__to__theta_phi(oa_alpha, oa_theta);
+            sp_theta += alpha_offset;
+            sp_phi += theta_offset;
+
+            // clang-format off
+            constexpr float theta_mod = 2.0f * M_PI;
+            //while (sp_theta >= theta_mod) sp_theta -= theta_mod;
+            //while (sp_theta <       0.0f) sp_theta += theta_mod;
+            while (sp_theta >=  0.5f * theta_mod) sp_theta -= theta_mod;
+            while (sp_theta <  -0.5f * theta_mod) sp_theta += theta_mod;
+
+            // constexpr float phi_mod = M_PI;
+            // while (sp_phi >= -phi_mod * 0.5f) sp_phi -= phi_mod;
+            // while (sp_phi <  +phi_mod * 0.5f) sp_phi += phi_mod;
+            // clang-format on
+
+            auto [adj_oa_alpha, adj_oa_theta] =
+                theta_phi__to__alpha_theta(sp_theta, sp_phi);
+            oa_alpha = adj_oa_alpha;
+            oa_theta = adj_oa_theta;
+          }
 
           float sx, sy; // source coordinate on input image
-          tf(in->lens, in->width, in->height, alpha, theta, sx, sy);
+          aos_to_src(in->lens, in->width, in->height, oa_alpha, oa_theta, sx, sy);
 
           // convert back to top-left aligned coordinates
           sx = (sx - 0.5f) + in->width * 0.5f;
@@ -258,20 +338,20 @@ void reproject_from_to(const Image *in, Image *out, int num_samples,
 }
 
 /**
- * Reproject a given image with an already-specified lens-type, as per the
- * templated from_func_t. This function switches over the target lens type.
+ * Reproject a given image to an already-specified (target) lens-type, as per the
+ * templated target_to_aospherical. This function switches over the input lens type.
  */
-template <from_func_t ff, sample_func_t sf>
-void reproject_from(const Image *in, Image *out, int num_samples,
+template <target_to_aospherical tgt_to_aos, sample_func_t sf>
+void reproject_to(const Image *in, Image *out, int num_samples,
                     float alpha_offset, float theta_offset) {
   if (in->lens.type == RECTILINEAR) {
-    reproject_from_to<ff, spherical_to_rectilinear, sf>(
+    reproject_from_to<tgt_to_aos, oaspherical_to_rectilinear, sf>(
         in, out, num_samples, alpha_offset, theta_offset);
   } else if (in->lens.type == FISHEYE_EQUIDISTANT) {
-    reproject_from_to<ff, spherical_to_equidistant, sf>(
+    reproject_from_to<tgt_to_aos, oaspherical_to_equidistant, sf>(
         in, out, num_samples, alpha_offset, theta_offset);
   } else if (in->lens.type == EQUIRECTANGULAR) {
-    reproject_from_to<ff, spherical_to_equirectangular, sf>(
+    reproject_from_to<tgt_to_aos, oaspherical_to_equirectangular, sf>(
         in, out, num_samples, alpha_offset, theta_offset);
   }
 }
@@ -280,13 +360,13 @@ template <sample_func_t sf>
 void reproject_with_sample_method(const Image *in, Image *out, int num_samples,
                                   float alpha_offset, float theta_offset) {
   if (out->lens.type == RECTILINEAR) {
-    reproject_from<rectilinear_to_spherical, sf>(in, out, num_samples,
-                                                 alpha_offset, theta_offset);
+    reproject_to<rectilinear_to_oaspherical, sf>(in, out, num_samples,
+                                                   alpha_offset, theta_offset);
   } else if (out->lens.type == FISHEYE_EQUIDISTANT) {
-    reproject_from<equidistant_to_spherical, sf>(in, out, num_samples,
-                                                 alpha_offset, theta_offset);
+    reproject_to<equidistant_to_oaspherical, sf>(in, out, num_samples,
+                                                   alpha_offset, theta_offset);
   } else if (out->lens.type == EQUIRECTANGULAR) {
-    reproject_from<equirectangular_to_spherical, sf>(
+    reproject_to<equirectangular_to_oaspherical, sf>(
         in, out, num_samples, alpha_offset, theta_offset);
   }
 }
@@ -338,6 +418,92 @@ void post_process(const Image *img, float exposure, float reinhard) {
       i += img->channels - ch;
     }
   }
+}
+
+constexpr auto test_eq = [](std::string name_a, float a, std::string name_b,
+                            float b) {
+  if (std::abs(a - b) > 1e-5f) {
+    std::printf("ERROR: %s = %12f, %s = %12f\n", name_a.c_str(), a,
+                name_b.c_str(), b);
+  }
+};
+
+bool check_all_equal(
+    std::vector<std::tuple<std::string, float, std::string, float>> pairs,
+    std::string test, float i0, float i1) {
+  bool good = true;
+  for (auto &pair : pairs) {
+    float a = std::get<1>(pair);
+    float b = std::get<3>(pair);
+    if (std::abs(a - b) > 1e-5f) {
+      if (good) {
+        std::printf("Test %s (input: %f %f) failed:\n", test.c_str(), i0, i1);
+      }
+      good = false;
+
+      std::printf("  %s=%12f, %s=%12f\n", std::get<0>(pair).c_str(), a,
+                  std::get<2>(pair).c_str(), b);
+    }
+  }
+  return good;
+}
+
+void test_conversion_math() {
+  ZoneScoped;
+
+  const auto test_at_tp = [](float pol_a, float pol_t, float sp_t, float sp_p) {
+    auto [tsp_t, tsp_p] = alpha_theta__to__theta_phi(pol_a, pol_t);
+    test_eq("test_sp_theta ", tsp_t, "expected_sp_theta ", sp_t);
+    test_eq("test_sp_phi   ", tsp_p, "expected_sp_phi   ", sp_p);
+    auto [tpol_a, tpol_t] = theta_phi__to__alpha_theta(sp_t, sp_p);
+    test_eq("test_pol_alpha", tpol_a, "expected_pol_alpha", pol_a);
+    test_eq("test_pol_theta", tpol_t, "expected_pol_theta", pol_t);
+  };
+
+  test_at_tp(0.0f, 0.0f, 0.0f, 0.0f);
+  test_at_tp(0.0f, 1.0f, 1.0f, 0.0f);
+
+  const auto test_at_tp_refl = [](float pol_a, float pol_t) {
+    auto [tsp_t, tsp_p] = alpha_theta__to__theta_phi(pol_a, pol_t);
+    auto [tpol_a, tpol_t] = theta_phi__to__alpha_theta(tsp_t, tsp_p);
+    return check_all_equal(
+        {
+            {"test_pol_alpha", tpol_a, "expected_pol_alpha", pol_a},
+            {"test_pol_theta", tpol_t, "expected_pol_theta", pol_t},
+        },
+        "Reflexive test pol->sp->pol:\n", pol_a, pol_t);
+  };
+
+  const auto test_tp_at_refl = [](float sp_t, float sp_p) {
+    auto [tpol_a, tpol_t] = theta_phi__to__alpha_theta(sp_t, sp_p);
+    auto [tsp_t, tsp_p] = alpha_theta__to__theta_phi(tpol_a, tpol_t);
+    return check_all_equal(
+        {
+            {"test_sp_theta ", tsp_t, "expected_sp_theta ", sp_t},
+            {"test_sp_phi   ", tsp_p, "expected_sp_phi   ", sp_p},
+        },
+        "Reflexive test sp->pol->sp:\n", sp_t, sp_p);
+  };
+
+  int good = 0;
+  int count = 0;
+  for (float theta = 0.05f; theta < 1.57f; theta *= 1.3f) {
+    for (float alpha = -3.0f; alpha < 3.0f; alpha += 0.1f) {
+      good += test_at_tp_refl(alpha, theta);
+      good += test_at_tp_refl(alpha, theta);
+      count += 2;
+    }
+  }
+
+  for (float theta = -1.0f; theta < 1.0f; theta += 0.1f) {
+    for (float phi = -1.0f; phi < 1.0f; phi += 0.1f) {
+      good += test_tp_at_refl(theta, phi);
+      good += test_tp_at_refl(theta, phi);
+      count += 2;
+    }
+  }
+
+  std::printf("Passed %d / %d tests.\n", good, count);
 }
 
 } // namespace reproject
