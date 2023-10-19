@@ -20,8 +20,7 @@ enum Interpolation {
 };
 
 void reproject(const Image *in, Image *out, int num_samples,
-               Interpolation interpolation, float alpha_offset,
-               float theta_offset);
+               Interpolation interpolation, const float *rotation_matrix);
 
 void post_process(const Image *img, float exposure, float reinhard);
 

@@ -87,6 +87,52 @@ int parse_equirectangular(const std::string &lstr, float res_x, float res_y,
   return 0;
 }
 
+
+// Function to multiply two 3x3 matrices
+void multiplyMatrices(const float a[9], const float b[9], float result[9]) {
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            result[i*3 + j] = 0;
+            for (int k = 0; k < 3; ++k) {
+                result[i*3 + j] += a[i*3 + k] * b[k*3 + j];
+            }
+        }
+    }
+}
+
+// Function to compute the rotation matrix from Euler angles
+void computeRotationMatrix(float rot_x, float rot_y, float rot_z, float matrix[9]) {
+  // clang-format off
+  // Rotation matrix around x-axis
+  float R_x[9] = {
+    1, 0, 0,
+    0, std::cos(rot_x), -std::sin(rot_x),
+    0, std::sin(rot_x), std::cos(rot_x)
+  };
+
+  // Rotation matrix around y-axis
+  float R_y[9] = {
+    std::cos(rot_y), 0, std::sin(rot_y),
+    0, 1, 0,
+    -std::sin(rot_y), 0, std::cos(rot_y)
+  };
+
+  // Rotation matrix around z-axis
+  float R_z[9] = {
+    std::cos(rot_z), -std::sin(rot_z), 0,
+    std::sin(rot_z), std::cos(rot_z), 0,
+    0, 0, 1
+  };
+
+  // Compute R = R_z * R_y * R_x
+  float temp[9];
+  multiplyMatrices(R_y, R_x, temp); // temp = R_y * R_x
+  multiplyMatrices(R_z, temp, matrix); // matrix = R_z * temp
+  // clang-format on
+}
+
+
+
 int main(int argc, char **argv) {
   ZoneScoped;
 
@@ -177,10 +223,8 @@ int main(int argc, char **argv) {
     ("equirectangular", "Output equirectangular images with given longitude "
                         "min,max and latitude min,max value.",
      cxxopts::value<std::string>(), "longitude_min,longitude_max,latitude_min,latitude_max")
-    ("alpha-offset", "Horizontal / longitudinal offset to be added upon reprojection.",
-     cxxopts::value<double>()->default_value("0.0"), "radians")
-    ("theta-offset", "Vertical / latitudinal offset to be added upon reprojection.",
-     cxxopts::value<double>()->default_value("0.0"), "radians")
+    ("rotation", "Specify a rotation",
+     cxxopts::value<std::string>()->default_value("0.0"), "rotx, roty, rotz (degrees)")
     ;
 
   options.add_options("Color processing")
@@ -218,8 +262,7 @@ int main(int argc, char **argv) {
   bool dry_run = false;
   bool reproject = true;
   bool skip_if_exists = false;
-  float alpha_offset = 0.0;
-  float theta_offset = 0.0;
+  float *rotation_matrix = nullptr;
   try {
     result = options.parse(argc, argv);
     if (result.count("help")) {
@@ -257,8 +300,19 @@ int main(int argc, char **argv) {
     } else {
       scale = result["scale"].as<double>();
     }
-    alpha_offset = result["alpha-offset"].as<double>();
-    theta_offset = result["theta-offset"].as<double>();
+
+    std::string euler_angles = result["rotation"].as<std::string>();
+    {
+      int comma0 = euler_angles.find(',');
+      int comma1 = euler_angles.find(',', comma0 + 1);
+      float rot_x = std::atof(euler_angles.substr(0, comma0).c_str()) / 180.0 * M_PI;
+      float rot_y = std::atof(euler_angles.substr(comma0 + 1, comma1).c_str()) / 180.0 * M_PI;
+      float rot_z = std::atof(euler_angles.substr(comma1 + 1).c_str()) / 180.0 * M_PI;
+
+      rotation_matrix = new float[9];
+      computeRotationMatrix(rot_x, rot_y, rot_z, rotation_matrix);
+    }
+
     exposure = std::pow(2.0, result["exposure"].as<double>());
     reinhard = result["reinhard"].as<double>();
     if (result.count("no-reproject")) {
@@ -475,7 +529,7 @@ int main(int argc, char **argv) {
   std::function<void(std::string)> submit_file = [&](fs::path p) {
     pool.push([p, num_samples, interpolation, output_dir, scale,
                ores_x, ores_y, input_lens, output_lens,
-               alpha_offset, theta_offset, &done_count, &count, reproject,
+               rotation_matrix, &done_count, &count, reproject,
                exposure, reinhard, store_exr, store_png, skip_if_exists](int) {
       ZoneScopedN("process_file");
       try {
@@ -528,8 +582,7 @@ int main(int argc, char **argv) {
           bytes *= output.channels * sizeof(float);
           std::memcpy(output.data, input.data, bytes);
         } else {
-          reproject::reproject(&input, &output, num_samples, interpolation,
-                               alpha_offset, theta_offset);
+          reproject::reproject(&input, &output, num_samples, interpolation, rotation_matrix);
         }
 
         if (exposure != 1.0 || reinhard != 1.0) {
