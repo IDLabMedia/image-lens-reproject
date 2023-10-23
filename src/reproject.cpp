@@ -36,8 +36,14 @@ template <typename T> inline T clamp(T x, T min, T max) {
 
 // === SAMPLING ===
 
+template <bool LoopHorizontally>
 inline void sample_nearest(const Image *img, float sx, float sy, float *out) {
-  int lx = clamp(int(sx + 0.5f), 0, img->width - 1);
+  int lx;
+  if constexpr (LoopHorizontally) {
+    lx = (int(sx + 0.5f) + img->width) % img->width;
+  } else {
+    lx = clamp(int(sx + 0.5f), 0, img->width - 1);
+  }
   int ly = clamp(int(sy + 0.5f), 0, img->height - 1);
 
   int pitch = img->width * img->channels;
@@ -46,10 +52,17 @@ inline void sample_nearest(const Image *img, float sx, float sy, float *out) {
   }
 }
 
+template <bool LoopHorizontally>
 inline void sample_bilinear(const Image *img, float sx, float sy, float *out) {
   // clang-format off
-  int lx = clamp(int(sx)       , 0, img->width - 1);
-  int ux = clamp(int(sx + 1.0f), 0, img->width - 1);
+  int lx, ux;
+  if constexpr (LoopHorizontally) {
+    lx = (int(sx)        + img->width) % img->width;
+    ux = (int(sx + 1.0f) + img->width) % img->width;
+  } else {
+    lx = clamp(int(sx)       , 0, img->width - 1);
+    ux = clamp(int(sx + 1.0f), 0, img->width - 1);
+  }
   int ly = clamp(int(sy)       , 0, img->height - 1);
   int uy = clamp(int(sy + 1.0f), 0, img->height - 1);
   // clang-format on
@@ -78,9 +91,9 @@ inline void sample_bilinear(const Image *img, float sx, float sy, float *out) {
 
 inline float cubicInterpolate(float p[4], float x) {
   // clang-format off
-  return p[1] + 0.5 * x * (p[2] - p[0] + x *
-          (2.0 * p[0] - 5.0 * p[1] + 4.0 * p[2] - p[3] + x *
-           (3.0 * (p[1] - p[2]) + p[3] - p[0])));
+  return p[1] + 0.5f * x * (p[2] - p[0] + x *
+          (2.0f * p[0] - 5.0f * p[1] + 4.0f * p[2] - p[3] + x *
+           (3.0f * (p[1] - p[2]) + p[3] - p[0])));
   // clang-format on
 }
 
@@ -93,12 +106,21 @@ inline float bicubicInterpolate(float p[4][4], float x, float y) {
   return cubicInterpolate(arr, x);
 }
 
+template <bool LoopHorizontally>
 inline void sample_bicubic(const Image *img, float sx, float sy, float *out) {
   // clang-format off
-  int x0 = clamp(int(sx - 1.0f), 0, img->width - 1);
-  int x1 = clamp(int(sx       ), 0, img->width - 1);
-  int x2 = clamp(int(sx + 1.0f), 0, img->width - 1);
-  int x3 = clamp(int(sx + 2.0f), 0, img->width - 1);
+  int x0, x1, x2, x3;
+  if constexpr (LoopHorizontally) {
+    x0 = (int(sx - 1.0f) + img->width) % img->width;
+    x1 = (int(sx       ) + img->width) % img->width;
+    x2 = (int(sx + 1.0f) + img->width) % img->width;
+    x3 = (int(sx + 2.0f) + img->width) % img->width;
+  } else {
+    x0 = clamp(int(sx - 1.0f), 0, img->width - 1);
+    x1 = clamp(int(sx       ), 0, img->width - 1);
+    x2 = clamp(int(sx + 1.0f), 0, img->width - 1);
+    x3 = clamp(int(sx + 2.0f), 0, img->width - 1);
+  }
   int y0 = clamp(int(sy - 1.0f), 0, img->height - 1);
   int y1 = clamp(int(sy       ), 0, img->height - 1);
   int y2 = clamp(int(sy + 1.0f), 0, img->height - 1);
@@ -125,63 +147,7 @@ inline void sample_bicubic(const Image *img, float sx, float sy, float *out) {
   }
 }
 
-// === CONVERSION FROM ALPHA/THETA TO THETA/PHI ===
-
-std::pair<float, float> alpha_theta__to__theta_phi(float alpha, float theta) {
-  // the alpha defines angle around the x-axis, away from the z-axis.
-  // theta the angle away from the x-axis.
-  float r = std::sin(theta);
-  float x = std::cos(theta);
-  float y = std::sin(alpha) * r;
-  float z = std::cos(alpha) * r;
-
-  // float theta_sp = std::atan2(std::sqrt(x * x + y * y), z);
-  // std::printf("len^2: %f\n", x * x + y * y + z * z);
-  float theta_sp = std::atan2(z, x);
-  float phi_sp = std::asin(y);
-
-  return {theta_sp, phi_sp};
-}
-
-std::pair<float, float> theta_phi__to__alpha_theta(float theta, float phi) {
-  float r = std::cos(phi);
-  float x = r * std::cos(theta);
-  float y = std::sin(phi);
-  float z = r * std::sin(theta);
-
-  // the alpha defines angle around the x-axis, away from the z-axis.
-  float alpha_pol = std::atan2(y, z);
-  // theta the angle away from the x-axis.
-  float radius_pol = std::sqrt(y * y + z * z);
-  float theta_pol = std::asin(radius_pol);
-
-  return {alpha_pol, theta_pol};
-}
-
 // === RECTILINEAR ===
-
-inline void rectilinear_to_oaspherical(const LensInfo &li, float img_w,
-                                       float img_h, float cx, float cy,
-                                       float &alpha, float &theta) {
-  float r_px = std::sqrt(cx * cx + cy * cy); // [px]
-  alpha = std::atan2(cy, cx);
-  float factor = li.sensor_width / img_w; // [mm / px]
-  // r_mm = focal_length_mm * tan(theta)
-  // TODO validate
-  theta = std::atan(r_px / li.rectilinear.focal_length * factor);
-}
-
-inline void oaspherical_to_rectilinear(const LensInfo &li, float img_w,
-                                       float img_h, float alpha, float theta,
-                                       float &cx, float &cy) {
-  float x = std::cos(alpha);
-  float y = std::sin(alpha);
-  float r_mm = li.rectilinear.focal_length * std::tan(theta);
-  float r_px = r_mm / li.sensor_width * img_w;
-  cx = r_px * x;
-  cy = r_px * y;
-  // TODO valide
-}
 
 inline void rectilinear_to_vec(const LensInfo &li, float img_w, float img_h,
                                float cx, float cy, float &x, float &y,
@@ -201,6 +167,45 @@ inline void vec_to_rectilinear(const LensInfo &li, float img_w, float img_h,
 }
 
 // === EQUIDISTANT ===
+
+inline void equidistant_to_vec(const LensInfo &li, float img_w, float img_h,
+                               float cx, float cy, float &x, float &y,
+                               float &z) {
+
+  float r_px = std::sqrt(cx * cx + cy * cy); // [px]
+
+  float r_mm = r_px / img_w * li.sensor_width;
+  float focal_length = li.sensor_width / li.fisheye_equidistant.fov;
+  // r_mm = f * theta
+  // theta = r_mm / f
+  float theta = r_mm / focal_length;
+  float s = std::tan(theta);
+  x = s * cx;
+  y = s * cy;
+  z = -1.0f;
+  // TODO Validate
+  // TODO FIXME it's wrong...
+}
+
+inline void vec_to_equidistant(const LensInfo &li, float img_w, float img_h,
+                               float x, float y, float z, float &cx,
+                               float &cy) {
+  x /= -z;
+  y /= -z;
+  float r = std::sqrt(x * x + y * y);
+  float theta = std::atan(r);
+
+  float factor = li.sensor_width / img_w; // [mm / px]
+  float focal_length = li.sensor_width / li.fisheye_equidistant.fov;
+
+  float r_mm = focal_length * theta;
+  float r_px = r_mm / li.sensor_width * img_w;
+
+  cx = x / r * r_px;
+  cy = y / r * r_px;
+
+  // TODO Validate
+}
 
 inline void equidistant_to_oaspherical(const LensInfo &li, float img_w,
                                        float img_h, float cx, float cy,
@@ -239,54 +244,6 @@ inline void oaspherical_to_equidistant(const LensInfo &li, float img_w,
 
 // === EQUIRECTANGULAR ===
 
-inline void equirectangular_to_spherical(const LensInfo &li, float img_w,
-                                         float img_h, float cx, float cy,
-                                         float &theta, float &phi) {
-  // clang-format off
-  float longitude_span = li.equirectangular.longitude_max - li.equirectangular.longitude_min;
-  float latitude_span  = li.equirectangular.latitude_max  - li.equirectangular.latitude_min;
-  float longitude = ((cx / img_w) + 0.5f) * longitude_span + li.equirectangular.longitude_min;
-  float latitude  = ((cy / img_h) + 0.5f) * latitude_span  + li.equirectangular.latitude_min;
-  // clang-format on
-  // TODO: think about latitude up direction vs y-up direction.
-  theta = longitude;
-  phi = latitude;
-}
-
-inline void spherical_to_equirectangular(const LensInfo &li, float img_w,
-                                         float img_h, float theta, float phi,
-                                         float &cx, float &cy) {
-  constexpr float theta_mod = 2.0f * M_PI;
-  while (theta <= li.equirectangular.longitude_min)
-    theta += theta_mod;
-  while (theta > li.equirectangular.longitude_max)
-    theta -= theta_mod;
-
-  // clang-format off
-  float longitude_span = li.equirectangular.longitude_max - li.equirectangular.longitude_min;
-  float latitude_span  = li.equirectangular.latitude_max  - li.equirectangular.latitude_min;
-  cx = ((theta - li.equirectangular.longitude_min) / longitude_span - 0.5f) * img_w;
-  cy = ((phi   - li.equirectangular.latitude_min ) / latitude_span  - 0.5f) * img_h;
-  // clang-format on
-}
-
-inline void equirectangular_to_oaspherical(const LensInfo &li, float img_w,
-                                           float img_h, float cx, float cy,
-                                           float &alpha, float &theta) {
-  float a, t;
-  equirectangular_to_spherical(li, img_w, img_h, cx, cy, a, t);
-  auto [oaa, oat] = theta_phi__to__alpha_theta(a, t);
-  alpha = oaa;
-  theta = oat;
-}
-
-inline void oaspherical_to_equirectangular(const LensInfo &li, float img_w,
-                                           float img_h, float alpha,
-                                           float theta, float &cx, float &cy) {
-  auto [sp_theta, sp_phi] = alpha_theta__to__theta_phi(alpha, theta);
-  spherical_to_equirectangular(li, img_w, img_h, sp_theta, sp_phi, cx, cy);
-}
-
 inline void equirectangular_to_vec(const LensInfo &li, float img_w, float img_h,
                                    float cx, float cy, float &x, float &y,
                                    float &z) {
@@ -304,7 +261,7 @@ inline void equirectangular_to_vec(const LensInfo &li, float img_w, float img_h,
 inline void vec_to_equirectangular(const LensInfo &li, float img_w, float img_h,
                                    float x, float y, float z, float &cx,
                                    float &cy) {
-  float theta = std::atan2(z, x);
+  float theta = -std::atan2(-x, -z);
   float phi = std::asin(y / std::sqrt(x * x + y * y + z * z));
 
   // clang-format off
@@ -316,8 +273,9 @@ inline void vec_to_equirectangular(const LensInfo &li, float img_w, float img_h,
 }
 
 template <target_to_vec_t tgt2vec, vec_to_source_t vec2src, sample_func_t sf>
-void reproject_from_to(const Image *in, Image *out, int num_samples,
-                       const float *rotation_matrix) {
+void reproject_from_to_with_interpolation(const Image *in, Image *out,
+                                          int num_samples,
+                                          const float *rotation_matrix) {
   ZoneScoped;
 
   int pitch = out->width * out->channels;
@@ -327,7 +285,7 @@ void reproject_from_to(const Image *in, Image *out, int num_samples,
   float *sample = buffer + out->channels;
   for (int y = 0; y < out->height; ++y) {
     for (int x = 0; x < out->width; ++x) {
-      // Center around (0,0)
+      // Take center of pixel, and center entire image around (0,0)
       float cx = (x + 0.5f) - out->width * 0.5f;
       float cy = (y + 0.5f) - out->height * 0.5f;
 
@@ -357,9 +315,20 @@ void reproject_from_to(const Image *in, Image *out, int num_samples,
           float sx, sy; // source coordinate on input image
           vec2src(in->lens, in->width, in->height, vx, vy, vz, sx, sy);
 
+          // if (x == out->width / 2 && y == out->height / 2) {
+          //   std::printf("x,y:%d,%d; (w,h:%d,%d)  vec:%12f,%12f%12f;
+          //   cx,cy:%f,%f, sx,sy:%12f,%12f\n", x, y, out->width, out->height,
+          //   vx, vy, vz, cx, cy, sx, sy);
+          // }
+
           // convert back to top-left aligned coordinates
           sx = (sx - 0.5f) + in->width * 0.5f;
           sy = (sy - 0.5f) + in->height * 0.5f;
+
+          // if (x == out->width / 2 && y == out->height / 2) {
+          //   std::printf("    sx,sy:%12f,%12f (w,h:%d,%d)\n", sx, sy,
+          //   in->width, in->height);
+          // }
 
           // bilinear interpolation from source image
           sf(in, sx, sy, sample);
@@ -378,67 +347,66 @@ void reproject_from_to(const Image *in, Image *out, int num_samples,
   delete[] buffer;
 }
 
+template <target_to_vec_t tgt2vec, vec_to_source_t vec2src,
+          bool LoopHorizontally>
+void reproject_from_to(const Image *in, Image *out, int num_samples,
+                       const float *rotation_matrix, Interpolation im) {
+  if (im == NEAREST) {
+    reproject_from_to_with_interpolation<tgt2vec, vec2src,
+                                         sample_nearest<LoopHorizontally>>(
+        in, out, num_samples, rotation_matrix);
+  } else if (im == BILINEAR) {
+    reproject_from_to_with_interpolation<tgt2vec, vec2src,
+                                         sample_bilinear<LoopHorizontally>>(
+        in, out, num_samples, rotation_matrix);
+  } else if (im == BICUBIC) {
+    reproject_from_to_with_interpolation<tgt2vec, vec2src,
+                                         sample_bicubic<LoopHorizontally>>(
+        in, out, num_samples, rotation_matrix);
+  }
+}
+
 /**
  * Reproject a given image to an already-specified (target) lens-type, as per
  * the templated target_to_aospherical. This function switches over the input
  * lens type.
  */
-template <target_to_vec_t tgt2vec, sample_func_t sf>
+template <target_to_vec_t tgt2vec>
 void reproject_to(const Image *in, Image *out, int num_samples,
-                  const float *rotation_matrix) {
+                  const float *rotation_matrix, Interpolation im) {
   if (in->lens.type == RECTILINEAR) {
-    reproject_from_to<tgt2vec, vec_to_rectilinear, sf>(in, out, num_samples,
-                                                       rotation_matrix);
+    reproject_from_to<tgt2vec, vec_to_rectilinear, false>(in, out, num_samples,
+                                                          rotation_matrix, im);
   } else if (in->lens.type == FISHEYE_EQUIDISTANT) {
     // reproject_from_to<tgt2vec, vec_to_equidistant, sf>(
     //     in, out, num_samples, rotation_matrix);
   } else if (in->lens.type == EQUIRECTANGULAR) {
-    reproject_from_to<tgt2vec, vec_to_equirectangular, sf>(in, out, num_samples,
-                                                           rotation_matrix);
+
+    float long_range = in->lens.equirectangular.longitude_max -
+                       in->lens.equirectangular.longitude_min;
+    if (std::abs(long_range - (2 * M_PI)) < 1e-5f) {
+      reproject_from_to<tgt2vec, vec_to_equirectangular, true>(
+          in, out, num_samples, rotation_matrix, im);
+    } else {
+      reproject_from_to<tgt2vec, vec_to_equirectangular, false>(
+          in, out, num_samples, rotation_matrix, im);
+    }
   }
 }
 
-template <sample_func_t sf>
 void reproject_with_sample_method(const Image *in, Image *out, int num_samples,
-                                  const float *rotation_matrix) {
-  if (out->lens.type == RECTILINEAR) {
-    reproject_to<rectilinear_to_vec, sf>(in, out, num_samples, rotation_matrix);
-  } else if (out->lens.type == FISHEYE_EQUIDISTANT) {
-    // reproject_to<equidistant_to_vec, sf>(in, out, num_samples,
-    //                                              alpha_offset, theta_offset);
-  } else if (out->lens.type == EQUIRECTANGULAR) {
-    reproject_to<equirectangular_to_vec, sf>(in, out, num_samples,
-                                             rotation_matrix);
-  }
-}
-
-void reproject_nearest_neighbor(const Image *in, Image *out, int num_samples,
-                                const float *rotation_matrix) {
-  ZoneScoped;
-  reproject_with_sample_method<sample_nearest>(in, out, num_samples,
-                                               rotation_matrix);
-}
-void reproject_bilinear(const Image *in, Image *out, int num_samples,
-                        const float *rotation_matrix) {
-  ZoneScoped;
-  reproject_with_sample_method<sample_bilinear>(in, out, num_samples,
-                                                rotation_matrix);
-}
-void reproject_bicubic(const Image *in, Image *out, int num_samples,
-                       const float *rotation_matrix) {
-  ZoneScoped;
-  reproject_with_sample_method<sample_bicubic>(in, out, num_samples,
-                                               rotation_matrix);
-}
+                                  const float *rotation_matrix,
+                                  Interpolation im) {}
 
 void reproject(const Image *in, Image *out, int num_samples, Interpolation im,
                const float *rotation_matrix) {
-  if (im == NEAREST) {
-    reproject_nearest_neighbor(in, out, num_samples, rotation_matrix);
-  } else if (im == BILINEAR) {
-    reproject_bilinear(in, out, num_samples, rotation_matrix);
-  } else if (im == BICUBIC) {
-    reproject_bicubic(in, out, num_samples, rotation_matrix);
+  if (out->lens.type == RECTILINEAR) {
+    reproject_to<rectilinear_to_vec>(in, out, num_samples, rotation_matrix, im);
+  } else if (out->lens.type == FISHEYE_EQUIDISTANT) {
+    reproject_to<equidistant_to_vec>(in, out, num_samples, rotation_matrix, im);
+  } else if (out->lens.type == EQUIRECTANGULAR) {
+    reproject_to<equirectangular_to_vec>(in, out, num_samples, rotation_matrix,
+                                         im);
   }
 }
 
@@ -488,62 +456,6 @@ bool check_all_equal(
   return good;
 }
 
-void test_conversion_math() {
-  ZoneScoped;
-
-  const auto test_at_tp = [](float pol_a, float pol_t, float sp_t, float sp_p) {
-    auto [tsp_t, tsp_p] = alpha_theta__to__theta_phi(pol_a, pol_t);
-    test_eq("test_sp_theta ", tsp_t, "expected_sp_theta ", sp_t);
-    test_eq("test_sp_phi   ", tsp_p, "expected_sp_phi   ", sp_p);
-    auto [tpol_a, tpol_t] = theta_phi__to__alpha_theta(sp_t, sp_p);
-    test_eq("test_pol_alpha", tpol_a, "expected_pol_alpha", pol_a);
-    test_eq("test_pol_theta", tpol_t, "expected_pol_theta", pol_t);
-  };
-
-  test_at_tp(0.0f, 0.0f, 0.0f, 0.0f);
-  test_at_tp(0.0f, 1.0f, 1.0f, 0.0f);
-
-  const auto test_at_tp_refl = [](float pol_a, float pol_t) {
-    auto [tsp_t, tsp_p] = alpha_theta__to__theta_phi(pol_a, pol_t);
-    auto [tpol_a, tpol_t] = theta_phi__to__alpha_theta(tsp_t, tsp_p);
-    return check_all_equal(
-        {
-            {"test_pol_alpha", tpol_a, "expected_pol_alpha", pol_a},
-            {"test_pol_theta", tpol_t, "expected_pol_theta", pol_t},
-        },
-        "Reflexive test pol->sp->pol:\n", pol_a, pol_t);
-  };
-
-  const auto test_tp_at_refl = [](float sp_t, float sp_p) {
-    auto [tpol_a, tpol_t] = theta_phi__to__alpha_theta(sp_t, sp_p);
-    auto [tsp_t, tsp_p] = alpha_theta__to__theta_phi(tpol_a, tpol_t);
-    return check_all_equal(
-        {
-            {"test_sp_theta ", tsp_t, "expected_sp_theta ", sp_t},
-            {"test_sp_phi   ", tsp_p, "expected_sp_phi   ", sp_p},
-        },
-        "Reflexive test sp->pol->sp:\n", sp_t, sp_p);
-  };
-
-  int good = 0;
-  int count = 0;
-  for (float theta = 0.05f; theta < 1.57f; theta *= 1.3f) {
-    for (float alpha = -3.0f; alpha < 3.0f; alpha += 0.1f) {
-      good += test_at_tp_refl(alpha, theta);
-      good += test_at_tp_refl(alpha, theta);
-      count += 2;
-    }
-  }
-
-  for (float theta = -1.0f; theta < 1.0f; theta += 0.1f) {
-    for (float phi = -1.0f; phi < 1.0f; phi += 0.1f) {
-      good += test_tp_at_refl(theta, phi);
-      good += test_tp_at_refl(theta, phi);
-      count += 2;
-    }
-  }
-
-  std::printf("Passed %d / %d tests.\n", good, count);
-}
+void test_conversion_math() { ZoneScoped; }
 
 } // namespace reproject

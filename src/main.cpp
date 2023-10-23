@@ -46,7 +46,7 @@ int parse_equisolid(const std::string &lstr, float res_x, float res_y,
 
 int parse_equidistant(const std::string &lstr, float res_x, float res_y,
                       reproject::LensInfo &li) {
-  li.type = reproject::FISHEYE_EQUISOLID;
+  li.type = reproject::FISHEYE_EQUIDISTANT;
   li.fisheye_equidistant.fov = std::atof(lstr.c_str());
   li.sensor_width = 36.0f;
   li.sensor_height = 36.0f;
@@ -101,8 +101,11 @@ void multiplyMatrices(const float a[9], const float b[9], float result[9]) {
 }
 
 // Function to compute the rotation matrix from Euler angles
-void computeRotationMatrix(float rot_x, float rot_y, float rot_z, float matrix[9]) {
+void computeRotationMatrix(float pan, float pitch, float roll, float matrix[9]) {
   // clang-format off
+  float rot_x = pitch;
+  float rot_y = pan;
+  float rot_z = roll;
   // Rotation matrix around x-axis
   float R_x[9] = {
     1, 0, 0,
@@ -126,8 +129,8 @@ void computeRotationMatrix(float rot_x, float rot_y, float rot_z, float matrix[9
 
   // Compute R = R_z * R_y * R_x
   float temp[9];
-  multiplyMatrices(R_y, R_x, temp); // temp = R_y * R_x
-  multiplyMatrices(R_z, temp, matrix); // matrix = R_z * temp
+  multiplyMatrices(R_x, R_z, temp); // temp = R_y * R_x
+  multiplyMatrices(R_y, temp, matrix); // matrix = R_z * temp
   // clang-format on
 }
 
@@ -224,7 +227,7 @@ int main(int argc, char **argv) {
                         "min,max and latitude min,max value.",
      cxxopts::value<std::string>(), "longitude_min,longitude_max,latitude_min,latitude_max")
     ("rotation", "Specify a rotation",
-     cxxopts::value<std::string>()->default_value("0.0"), "rotx, roty, rotz (degrees)")
+     cxxopts::value<std::string>()->default_value("0.0"), "pan, pitch, roll (degrees)")
     ;
 
   options.add_options("Color processing")
@@ -305,12 +308,12 @@ int main(int argc, char **argv) {
     {
       int comma0 = euler_angles.find(',');
       int comma1 = euler_angles.find(',', comma0 + 1);
-      float rot_x = std::atof(euler_angles.substr(0, comma0).c_str()) / 180.0 * M_PI;
-      float rot_y = std::atof(euler_angles.substr(comma0 + 1, comma1).c_str()) / 180.0 * M_PI;
-      float rot_z = std::atof(euler_angles.substr(comma1 + 1).c_str()) / 180.0 * M_PI;
+      float pan = std::atof(euler_angles.substr(0, comma0).c_str()) / 180.0 * M_PI;
+      float pitch = std::atof(euler_angles.substr(comma0 + 1, comma1).c_str()) / 180.0 * M_PI;
+      float roll = std::atof(euler_angles.substr(comma1 + 1).c_str()) / 180.0 * M_PI;
 
       rotation_matrix = new float[9];
-      computeRotationMatrix(rot_x, rot_y, rot_z, rotation_matrix);
+      computeRotationMatrix(pan, pitch, roll, rotation_matrix);
     }
 
     exposure = std::pow(2.0, result["exposure"].as<double>());
