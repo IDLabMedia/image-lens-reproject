@@ -179,12 +179,10 @@ inline void equidistant_to_vec(const LensInfo &li, float img_w, float img_h,
   // r_mm = f * theta
   // theta = r_mm / f
   float theta = r_mm / focal_length;
-  float s = std::tan(theta);
+  float s = std::sin(theta) / r_px;
   x = s * cx;
   y = s * cy;
-  z = -1.0f;
-  // TODO Validate
-  // TODO FIXME it's wrong...
+  z = std::cos(theta);
 }
 
 inline void vec_to_equidistant(const LensInfo &li, float img_w, float img_h,
@@ -378,8 +376,8 @@ void reproject_to(const Image *in, Image *out, int num_samples,
     reproject_from_to<tgt2vec, vec_to_rectilinear, false>(in, out, num_samples,
                                                           rotation_matrix, im);
   } else if (in->lens.type == FISHEYE_EQUIDISTANT) {
-    // reproject_from_to<tgt2vec, vec_to_equidistant, sf>(
-    //     in, out, num_samples, rotation_matrix);
+    reproject_from_to<tgt2vec, vec_to_equidistant, false>(in, out, num_samples,
+                                                          rotation_matrix, im);
   } else if (in->lens.type == EQUIRECTANGULAR) {
 
     float long_range = in->lens.equirectangular.longitude_max -
@@ -400,6 +398,7 @@ void reproject_with_sample_method(const Image *in, Image *out, int num_samples,
 
 void reproject(const Image *in, Image *out, int num_samples, Interpolation im,
                const float *rotation_matrix) {
+  ZoneScoped;
   if (out->lens.type == RECTILINEAR) {
     reproject_to<rectilinear_to_vec>(in, out, num_samples, rotation_matrix, im);
   } else if (out->lens.type == FISHEYE_EQUIDISTANT) {

@@ -16,7 +16,7 @@ int parse_rectilinear(const std::string &lstr, float res_x, float res_y,
                       reproject::LensInfo &li) {
   int comma = lstr.find(",");
   if (comma == std::string::npos) {
-    std::printf("Error: Required format for --rectilinear x,y\n");
+    std::printf("Error: Required format for --rectilinear focal_len,sensor_width\n");
     return 1;
   }
   auto &lir = li.rectilinear;
@@ -32,7 +32,7 @@ int parse_equisolid(const std::string &lstr, float res_x, float res_y,
   int comma1 = lstr.find(",");
   int comma2 = lstr.find(",", comma1 + 1);
   if (comma1 == std::string::npos || comma2 == std::string::npos) {
-    std::printf("Error: Required format for --equisolid x,y,z\n");
+    std::printf("Error: Required format for --equisolid focal_len,sensor_width,fov\n");
     return 1;
   }
   auto &lifes = li.fisheye_equisolid;
@@ -127,10 +127,10 @@ void computeRotationMatrix(float pan, float pitch, float roll, float matrix[9]) 
     0, 0, 1
   };
 
-  // Compute R = R_z * R_y * R_x
+  // Compute R = R_y * R_x * R_z
   float temp[9];
-  multiplyMatrices(R_x, R_z, temp); // temp = R_y * R_x
-  multiplyMatrices(R_y, temp, matrix); // matrix = R_z * temp
+  multiplyMatrices(R_x, R_z, temp); // temp = R_x * R_z
+  multiplyMatrices(R_y, temp, matrix); // matrix = R_y * temp
   // clang-format on
 }
 
