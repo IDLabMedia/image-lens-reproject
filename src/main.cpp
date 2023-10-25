@@ -16,7 +16,8 @@ int parse_rectilinear(const std::string &lstr, float res_x, float res_y,
                       reproject::LensInfo &li) {
   int comma = lstr.find(",");
   if (comma == std::string::npos) {
-    std::printf("Error: Required format for --rectilinear focal_len,sensor_width\n");
+    std::printf(
+        "Error: Required format for --rectilinear focal_len,sensor_width\n");
     return 1;
   }
   auto &lir = li.rectilinear;
@@ -32,7 +33,8 @@ int parse_equisolid(const std::string &lstr, float res_x, float res_y,
   int comma1 = lstr.find(",");
   int comma2 = lstr.find(",", comma1 + 1);
   if (comma1 == std::string::npos || comma2 == std::string::npos) {
-    std::printf("Error: Required format for --equisolid focal_len,sensor_width,fov\n");
+    std::printf(
+        "Error: Required format for --equisolid focal_len,sensor_width,fov\n");
     return 1;
   }
   auto &lifes = li.fisheye_equisolid;
@@ -87,21 +89,21 @@ int parse_equirectangular(const std::string &lstr, float res_x, float res_y,
   return 0;
 }
 
-
 // Function to multiply two 3x3 matrices
 void multiplyMatrices(const float a[9], const float b[9], float result[9]) {
-    for (int i = 0; i < 3; ++i) {
-        for (int j = 0; j < 3; ++j) {
-            result[i*3 + j] = 0;
-            for (int k = 0; k < 3; ++k) {
-                result[i*3 + j] += a[i*3 + k] * b[k*3 + j];
-            }
-        }
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      result[i * 3 + j] = 0;
+      for (int k = 0; k < 3; ++k) {
+        result[i * 3 + j] += a[i * 3 + k] * b[k * 3 + j];
+      }
     }
+  }
 }
 
 // Function to compute the rotation matrix from Euler angles
-void computeRotationMatrix(float pan, float pitch, float roll, float matrix[9]) {
+void computeRotationMatrix(float pan, float pitch, float roll,
+                           float matrix[9]) {
   // clang-format off
   float rot_x = pitch;
   float rot_y = pan;
@@ -133,8 +135,6 @@ void computeRotationMatrix(float pan, float pitch, float roll, float matrix[9]) 
   multiplyMatrices(R_y, temp, matrix); // matrix = R_y * temp
   // clang-format on
 }
-
-
 
 int main(int argc, char **argv) {
   ZoneScoped;
@@ -308,9 +308,12 @@ int main(int argc, char **argv) {
     {
       int comma0 = euler_angles.find(',');
       int comma1 = euler_angles.find(',', comma0 + 1);
-      float pan = std::atof(euler_angles.substr(0, comma0).c_str()) / 180.0 * M_PI;
-      float pitch = std::atof(euler_angles.substr(comma0 + 1, comma1).c_str()) / 180.0 * M_PI;
-      float roll = std::atof(euler_angles.substr(comma1 + 1).c_str()) / 180.0 * M_PI;
+      float pan =
+          std::atof(euler_angles.substr(0, comma0).c_str()) / 180.0 * M_PI;
+      float pitch = std::atof(euler_angles.substr(comma0 + 1, comma1).c_str()) /
+                    180.0 * M_PI;
+      float roll =
+          std::atof(euler_angles.substr(comma1 + 1).c_str()) / 180.0 * M_PI;
 
       rotation_matrix = new float[9];
       computeRotationMatrix(pan, pitch, roll, rotation_matrix);
@@ -530,10 +533,10 @@ int main(int argc, char **argv) {
   ctpl::thread_pool pool(num_threads);
 
   std::function<void(std::string)> submit_file = [&](fs::path p) {
-    pool.push([p, num_samples, interpolation, output_dir, scale,
-               ores_x, ores_y, input_lens, output_lens,
-               rotation_matrix, &done_count, &count, reproject,
-               exposure, reinhard, store_exr, store_png, skip_if_exists](int) {
+    pool.push([p, num_samples, interpolation, output_dir, scale, ores_x, ores_y,
+               input_lens, output_lens, rotation_matrix, &done_count, &count,
+               reproject, exposure, reinhard, store_exr, store_png,
+               skip_if_exists](int) {
       ZoneScopedN("process_file");
       try {
         fs::path output_path_base = output_dir / p.filename();
@@ -562,7 +565,8 @@ int main(int argc, char **argv) {
         } else if (p.extension() == ".jpeg" || p.extension() == ".jpg") {
           input = reproject::read_jpeg(p.string());
         } else {
-          std::printf("Input format not supported: %s\n", p.extension().c_str());
+          std::printf("Input format not supported: %s\n",
+                      p.extension().c_str());
         }
         input.lens = input_lens;
 
@@ -585,7 +589,8 @@ int main(int argc, char **argv) {
           bytes *= output.channels * sizeof(float);
           std::memcpy(output.data, input.data, bytes);
         } else {
-          reproject::reproject(&input, &output, num_samples, interpolation, rotation_matrix);
+          reproject::reproject(&input, &output, num_samples, interpolation,
+                               rotation_matrix);
         }
 
         if (exposure != 1.0 || reinhard != 1.0) {

@@ -361,6 +361,9 @@ void reproject_from_to(const Image *in, Image *out, int num_samples,
     reproject_from_to_with_interpolation<tgt2vec, vec2src,
                                          sample_bicubic<LoopHorizontally>>(
         in, out, num_samples, rotation_matrix);
+  } else {
+    std::printf("Interpolation method not supported.\n");
+    std::exit(1);
   }
 }
 
@@ -389,6 +392,9 @@ void reproject_to(const Image *in, Image *out, int num_samples,
       reproject_from_to<tgt2vec, vec_to_equirectangular, false>(
           in, out, num_samples, rotation_matrix, im);
     }
+  } else {
+    std::printf("Input lens type not supported.\n");
+    std::exit(1);
   }
 }
 
@@ -406,6 +412,9 @@ void reproject(const Image *in, Image *out, int num_samples, Interpolation im,
   } else if (out->lens.type == EQUIRECTANGULAR) {
     reproject_to<equirectangular_to_vec>(in, out, num_samples, rotation_matrix,
                                          im);
+  } else {
+    std::printf("Output lens type not supported.\n");
+    std::exit(1);
   }
 }
 
