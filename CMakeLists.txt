@@ -35,7 +35,7 @@ target_include_directories(ctpl INTERFACE "lib/ctpl/")
 set(JSON_MultipleHeaders ON CACHE BOOL "" FORCE)
 add_subdirectory(lib/json)
 
-find_package(JPEG REQUIRED)
+find_package(JPEG)
 
 set(CMAKE_SKIP_BUILD_RPATH  FALSE)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
@@ -61,6 +61,7 @@ target_link_libraries(reproject PUBLIC
 set_target_properties(reproject PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
+target_compile_definitions(reproject PRIVATE -D_USE_MATH_DEFINES)
 
 
 
