@@ -41,59 +41,98 @@ git submodule update
 
 ```
 Usage:
-  ./reproject [OPTION...]
+  ./bin/reproject [OPTION...]
 
  Color processing options:
-      --exposure EV   Exposure compensation in stops (EV) to brigthen or
+      --exposure EV   Exposure compensation in stops (EV) to brigthen or 
                       darken the pictures. (default: 0.0)
-      --reinhard max  Use reinhard tonemapping with given maximum value
-                      (after exposure processing) on the output images.
+      --reinhard max  Use reinhard tonemapping with given maximum value 
+                      (after exposure processing) on the output images. 
                       (default: 1.0)
 
+ Filter files options:
+      --filter-prefix prefix  Only include files starting with (default: 
+                              "")
+      --filter-suffix suffix  Only include files ending with (default: "")
+
+ Input optics.
+   These are usually inferred by the config JSONs. When specifying
+   --no-configs, lens information needs to be passed through these
+   command line options options:
+      --i-rectilinear focal_length,sensor_width
+                                Input rectilinear images with given 
+                                focal_length,sensor_width tuple.
+      --i-equisolid focal_length,sensor_width,fov
+                                Input equisolid images with given 
+                                focal_length,sensor_width,fov tuple.
+      --i-equidistant fov       Input equidistant images with given fov 
+                                value.
+      --i-equirectangular long_min,long_max,lat_min,lat_max (radians)
+                                Input equirectangular images with given 
+                                longitude min,max and latitude min,max 
+                                value or 'full'.
+
  Input/output options:
-      --input-cfg json-file   Input JSON file containing lens and camera
-                              settings of the input images.
-      --output-cfg json-file  Output JSON file containing lens and camera
-                              settings of the input images.
-  -i, --input-dir file        Input directory containing images to
-                              reproject.
-      --single file           A single input file to convert.
-  -o, --output-dir file       Output directory to put the reprojected
-                              images.
-      --exr                   Output EXR files. Color and depth.
-      --png                   Output PNG files. Color only.
+      --input-cfg json-file     Input JSON file containing lens and camera 
+                                settings of the input images.
+      --output-cfg json-file    Output JSON file containing lens and camera 
+                                settings of the output images.
+      --no-configs width,height
+                                Work without reading and writing config 
+                                files. Requires you to specify the input 
+                                lens through the input-optics flags 
+                                (staring with -i-...) and the expected 
+                                resolution of the input images here.
+  -i, --input-dir file          Input directory containing images to 
+                                reproject.
+      --single file             A single input file to convert.
+  -o, --output-dir file         Output directory to put the reprojected 
+                                images.
+      --exr                     Output EXR files. Color and depth.
+      --png                     Output PNG files. Color only.
 
  Output optics options:
       --no-reproject            Do not reproject at all.
       --rectilinear focal_length,sensor_width
-                                Output rectilinear images with given
+                                Output rectilinear images with given 
                                 focal_length,sensor_width tuple.
       --equisolid focal_length,sensor_width,fov
-                                Output equisolid images with given
+                                Output equisolid images with given 
                                 focal_length,sensor_width,fov tuple.
-      --equidistant fov         Output equidistant images with given fov
+      --equidistant fov         Output equidistant images with given fov 
                                 value.
+      --equirectangular longitude_min,longitude_max,latitude_min,latitude_max
+                                Output equirectangular images with given 
+                                longitude min,max and latitude min,max 
+                                value or 'full'.
+      --rotation pan, pitch, roll (degrees)
+                                Specify a rotation (default: 0.0)
 
  Runtime options:
-  -j, --parallel threads  Number of parallel images to process. (default:
+      --skip-if-exists    Skip if the output file already exists.
+  -j, --parallel threads  Number of parallel images to process. (default: 
                           1)
-      --dry-run           Do not actually reproject images. Only produce
+      --dry-run           Do not actually reproject images. Only produce 
                           config.
   -h, --help              Show help
 
  Sampling options:
-  -s, --samples number    Number of samples per dimension for interpolating
-                          (default: 1)
-      --nn                Nearest neighbor interpolation
-      --bl                Bilinear interpolation
-      --bc                Bicubic interpolation (default)
-      --scale percentage  Output scale, as a fraction of the input size. It
-                          is recommended to increase --samples to prevent
-                          aliassing in case you are downscaling. Eg:
-                          --scale 0.5 --samples 2 or --scale 0.33334
-                          --samples 3 or --scale 0.25 --samples 4. Final
-                          dimensions are rounded towards zero. (default:
-                          1.0)
+  -s, --samples number          Number of samples per dimension for 
+                                interpolating (default: 1)
+      --nn                      Nearest neighbor interpolation
+      --bl                      Bilinear interpolation
+      --bc                      Bicubic interpolation (default)
+      --scale percentage        Output scale, as a fraction of the input 
+                                size. It is recommended to increase 
+                                --samples to prevent aliassing in case you 
+                                are downscaling. Eg: --scale 0.5 --samples 
+                                2 or --scale 0.33334 --samples 3 or --scale 
+                                0.25 --samples 4. Final dimensions are 
+                                rounded towards zero. (default: 1.0)
+      --output-resolution width,height
+                                A fixed output resolution. Overwrites the 
+                                behavior of the 'scale' parameter.
+
 ```
 
 ### Configuration JSON

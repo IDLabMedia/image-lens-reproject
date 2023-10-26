@@ -48,11 +48,15 @@ jobs:
     - name: Cache vcpkg libraries
       if: runner.os == 'Windows'
       uses: actions/cache@v3
+      env:
+        cache-name: cache-vcpkg-packages
       with:
         path: |
           C:/vcpkg/installed
           C:/vcpkg/vcpkg
-        key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
+        key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('C:/vcpkg/**/vcpkg.json') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.cache-name }}-
 
 
     - name: Install libjpeg-turbo (Windows)

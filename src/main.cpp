@@ -59,31 +59,36 @@ int parse_equirectangular(const std::string &lstr, float res_x, float res_y,
                           reproject::LensInfo &li) {
   auto &lier = li.equirectangular;
   li.type = reproject::EQUIRECTANGULAR;
-  int argidx = 0;
-  for (size_t b = 0, e = lstr.find(",");;
-       b = e + 1, e = lstr.find(",", e + 1)) {
-    std::string arg = lstr.substr(b, e - b);
-    std::printf("argidx: %d, arg: %s, b: %zu, e: %zu\n", argidx, arg.c_str(), b,
-                e);
-    double fa = std::atof(arg.c_str());
-    // clang-format off
+  if (lstr == "full") {
+    lier.longitude_min = -M_PI;
+    lier.longitude_max = M_PI;
+    lier.latitude_min = -M_PI * 0.5f;
+    lier.latitude_max = M_PI * 0.5f;
+  } else {
+    int argidx = 0;
+    for (size_t b = 0, e = lstr.find(",");;
+         b = e + 1, e = lstr.find(",", e + 1)) {
+      std::string arg = lstr.substr(b, e - b);
+      double fa = std::atof(arg.c_str());
+      // clang-format off
       switch (argidx) {
         case 0: lier.longitude_min = fa; break;
         case 1: lier.longitude_max = fa; break;
         case 2: lier.latitude_min = fa; break;
         case 3: lier.latitude_max = fa; break;
+      }
       // clang-format on
-    }
 
-    argidx++;
-    if (e == std::string::npos) {
-      break;
+      argidx++;
+      if (e == std::string::npos) {
+        break;
+      }
     }
-  }
-  if (argidx != 4) {
-    std::printf("Error: expected 4 arguments for equirectangular, got %d.\n",
-                argidx);
-    return 1;
+    if (argidx != 4) {
+      std::printf("Error: expected 4 arguments for equirectangular, got %d.\n",
+                  argidx);
+      return 1;
+    }
   }
   li.sensor_width = li.sensor_height = 0;
   return 0;
@@ -208,7 +213,7 @@ int main(int argc, char **argv) {
                       "fov value.",
      cxxopts::value<std::string>(), "fov")
     ("i-equirectangular", "Input equirectangular images with given longitude "
-                          "min,max and latitude min,max value.",
+                          "min,max and latitude min,max value or 'full'.",
      cxxopts::value<std::string>(), "long_min,long_max,lat_min,lat_max (radians)")
     ;
 
@@ -224,7 +229,7 @@ int main(int argc, char **argv) {
                     "fov value.",
      cxxopts::value<std::string>(), "fov")
     ("equirectangular", "Output equirectangular images with given longitude "
-                        "min,max and latitude min,max value.",
+                        "min,max and latitude min,max value or 'full'.",
      cxxopts::value<std::string>(), "longitude_min,longitude_max,latitude_min,latitude_max")
     ("rotation", "Specify a rotation",
      cxxopts::value<std::string>()->default_value("0.0"), "pan, pitch, roll (degrees)")
