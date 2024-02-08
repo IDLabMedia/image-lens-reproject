@@ -6,7 +6,7 @@
 ## What is lens-reproject?
 
 lens-reproject is a tool to reproject images taken with a known lens to a new
-lens. The process is unprojects every pixel coordinate back to the light ray in
+lens. The process unprojects every pixel coordinate back to the light ray in
 spherical coordinates -- with the origin set to the center of projection --
 after which it projects the light ray back onto the sensor using the new lens
 parameters. A variety of lenses is supported:
@@ -14,6 +14,13 @@ parameters. A variety of lenses is supported:
  - Rectilinear (The default perspective projection lenses).
  - Equisolid (Fisheye)
  - Equidistant (Fisheye)
+
+## Prerequisites
+
+On Linux systems, install libjpeg:
+```sh
+sudo apt install libjpeg-turbo8-dev
+```
 
 ## Build
 You will need a C++ compiler and CMake. All other dependencies are included as
